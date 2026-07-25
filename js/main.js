@@ -2,7 +2,8 @@ import { DialCluster } from './dials.js';
 import { ArtGen } from './gen.js';
 import { AESTHETICS } from './aesthetics.js';
 
-const STORE_KEY = 'fidget-synth.pivot.v2';
+// v3: radius band changed (0.52–0.95); old stored reaches would mask it.
+const STORE_KEY = 'fidget-synth.pivot.v3';
 const LONGPRESS_MS = 450;
 const MOVE_CANCEL_PX = 12;
 
