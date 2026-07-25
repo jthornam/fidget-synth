@@ -1,7 +1,7 @@
-import { DialCluster, DETENT_STEP } from './dials.js';
+import { DialCluster, DETENT_STEP, NUM_MODES } from './dials.js';
 import { ArtGen } from './gen.js';
 
-const STORE_KEY = 'fidget-synth.pivot.v1';
+const STORE_KEY = 'fidget-synth.pivot.v2';
 const LONGPRESS_MS = 450;
 const MOVE_CANCEL_PX = 12;
 
@@ -21,7 +21,7 @@ const gen = new ArtGen(artCanvas, POSTER != null ? parseFloat(POSTER) : null);
 const cluster = new DialCluster();
 
 if (Q.get('mode') != null) {
-  cluster.c.idx = parseInt(Q.get('mode'), 10) || 0;
+  cluster.c.idx = Math.min(NUM_MODES - 1, Math.max(0, parseInt(Q.get('mode'), 10) || 0));
   cluster.c.rot = cluster.c.idx * DETENT_STEP;
 }
 if (BARE) {
@@ -38,24 +38,25 @@ let phaseBase = 0;
 
 let W = 0, H = 0, DPR = 1;
 let placed = false;
-let handed = 'R';
 
-function pivotMargin() {
-  return cluster.outerR + cluster.ringWidth() * 1.4 + 8;
+// The arc center sits at the thumb's base joint: just past the bottom corner
+// of the holding hand, slightly off-screen.
+function cornerPivot(handed) {
+  return handed === 'L' ? { x: -12, y: H + 16 } : { x: W + 12, y: H + 16 };
 }
 
-function clampPivot(x, y) {
-  // Spec §2: clamp the pivot inward rather than deform the rings.
-  const m = pivotMargin();
-  return {
-    x: Math.min(W - m, Math.max(m, x)),
-    y: Math.min(H - m - 12, Math.max(m, y)),
-  };
+// Middle-arc radius limits, as fractions of the short screen dimension.
+function clampRB(r) {
+  const m = Math.min(W, H);
+  return Math.min(0.78 * m, Math.max(0.42 * m, r));
 }
 
-function persistPivot(x, y) {
+function persistPivot(rB = cluster.rB) {
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ nx: x / W, ny: y / H, handed }));
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      handed: cluster.handed,
+      rBn: rB / Math.min(W, H),
+    }));
   } catch (e) { /* private mode etc.; toy degrades to re-placing each open */ }
 }
 
@@ -64,7 +65,7 @@ function loadPivot() {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return null;
     const p = JSON.parse(raw);
-    if (typeof p.nx !== 'number' || typeof p.ny !== 'number') return null;
+    if (typeof p.rBn !== 'number') return null;
     return p;
   } catch (e) { return null; }
 }
@@ -76,44 +77,37 @@ function resize() {
   uiCanvas.width = W * DPR;
   uiCanvas.height = H * DPR;
   gen.resize(Math.round(W * DPR), Math.round(H * DPR));
-  cluster.outerR = BARE
-    ? Math.min(W, H) * 0.40 // 80% diameter: safe area for maskable icons
-    : Math.min(150, Math.max(104, Math.min(W, H) * 0.36));
 
   if (BARE) {
+    // Centered full rings for the icon; outer ring at 80% diameter is the
+    // maskable-icon safe area.
     cluster.pivot.x = W / 2;
     cluster.pivot.y = H / 2;
+    cluster.rB = (Math.min(W, H) * 0.40) / cluster.relRadii[0];
     return;
   }
   if (POSTER != null) {
-    const p = clampPivot(W * 0.66, H * 0.55);
-    cluster.pivot.x = p.x;
-    cluster.pivot.y = p.y;
+    cluster.handed = 'R';
+    cluster.pivot = cornerPivot('R');
+    cluster.rB = Math.min(W, H) * 0.55;
     return;
   }
 
   const stored = placed ? loadPivot() : null;
-  if (stored) {
-    const p = clampPivot(stored.nx * W, stored.ny * H);
-    cluster.pivot.x = p.x;
-    cluster.pivot.y = p.y;
-  } else if (!placed) {
-    // First-launch resting position: centered, low (spec §2).
-    const p = clampPivot(W / 2, H * 0.68);
-    cluster.pivot.x = p.x;
-    cluster.pivot.y = p.y;
-  } else {
-    const p = clampPivot(cluster.pivot.x, cluster.pivot.y);
-    cluster.pivot.x = p.x;
-    cluster.pivot.y = p.y;
-  }
+  cluster.pivot = cornerPivot(cluster.handed);
+  cluster.rB = stored
+    ? clampRB(stored.rBn * Math.min(W, H))
+    : clampRB(Math.min(W, H) * 0.62);
 }
 
 if (POSTER != null || BARE) {
   placed = true; // posed shots never run first-touch placement
 } else {
   const stored = loadPivot();
-  if (stored) { placed = true; handed = stored.handed === 'L' ? 'L' : 'R'; }
+  if (stored) {
+    placed = true;
+    cluster.handed = stored.handed === 'L' ? 'L' : 'R';
+  }
 }
 resize();
 window.addEventListener('resize', resize);
@@ -132,6 +126,16 @@ function shortestDelta(a, b) {
   return d;
 }
 
+// First touch and long-press reposition share this: the touched point is the
+// thumb tip at rest, so its side picks the corner and its distance from that
+// corner becomes the middle-arc radius.
+function poseFromPoint(x, y) {
+  const handed = x < W / 2 ? 'L' : 'R';
+  const p = (handed === 'L') ? { x: -12, y: H + 16 } : { x: W + 12, y: H + 16 };
+  const rB = clampRB(Math.hypot(x - p.x, y - p.y));
+  return { handed, p, rB };
+}
+
 function onDown(e) {
   if (active || !e.isPrimary) return;
   if (phaseHold != null) {
@@ -143,11 +147,11 @@ function onDown(e) {
 
   if (!placed) {
     // The first touch places the cluster and sets handedness (spec §2).
-    handed = x < W / 2 ? 'L' : 'R';
-    const p = clampPivot(x, y);
-    cluster.placeAt(p.x, p.y);
-    persistPivot(p.x, p.y);
+    const pose = poseFromPoint(x, y);
+    cluster.handed = pose.handed;
+    cluster.placeAt(pose.p.x, pose.p.y, pose.rB);
     placed = true;
+    persistPivot(pose.rB);
     return;
   }
 
@@ -176,9 +180,10 @@ function onMove(e) {
     cluster.applyDelta(active.ring, shortestDelta(ang, active.last));
     active.last = ang;
   } else if (active.type === 'move') {
-    const p = clampPivot(x, y);
-    cluster.pivot.x = p.x;
-    cluster.pivot.y = p.y;
+    const pose = poseFromPoint(x, y);
+    cluster.handed = pose.handed;
+    cluster.pivot = pose.p;
+    cluster.rB = pose.rB;
   } else if (active.type === 'bg' && !active.moved) {
     if (Math.hypot(x - active.x, y - active.y) > MOVE_CANCEL_PX) {
       active.moved = true;
@@ -193,8 +198,7 @@ function onUp(e) {
     cluster.setGlow(active.ring, 0);
     if (active.ring === 2) cluster.snapC();
   } else if (active.type === 'move') {
-    handed = cluster.pivot.x < W / 2 ? 'L' : 'R';
-    persistPivot(cluster.pivot.x, cluster.pivot.y);
+    persistPivot();
     cluster.liftT = 0;
   } else if (active.type === 'bg') {
     clearTimeout(active.timer);

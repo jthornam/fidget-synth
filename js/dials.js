@@ -1,12 +1,17 @@
-// Dial cluster: three concentric rings around a thumb pivot.
-// Ring 0 = A (outer, continuous), ring 1 = B (middle, continuous),
-// ring 2 = C (inner, mode selector with detents).
-//
-// Feel constants live here — spec §2 says record what wins.
+// Dial cluster: three concentric arc dials whose shared center is the thumb's
+// base joint — just off-screen past the bottom corner of the holding hand.
+// The rings are drawn as full circles and clipped by the screen, so they read
+// as arcs running off the edges. Ring 0 = A (outer), 1 = B (middle),
+// 2 = C (inner, mode selector).
 export const NUM_MODES = 4;
-export const GAIN = 1.0;             // revolutions per full parameter sweep
-export const DETENT_STEP = Math.PI / 4; // 45° per detent on Dial C
 const TAU = Math.PI * 2;
+
+// Feel constants — spec §2 says record what wins.
+// The visible angular window from a bottom-corner pivot is ~78°; that window
+// IS the full sweep: A/B run their whole range across it, and C's four
+// detents sit along it like a gauge.
+export const SWEEP = (78 / 180) * Math.PI;
+export const DETENT_STEP = SWEEP / (NUM_MODES - 1);
 
 const COL = {
   under: 'rgba(8,10,13,0.55)',
@@ -19,33 +24,43 @@ const COL = {
 };
 
 function cubicOut(t) { return 1 - Math.pow(1 - t, 3); }
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 export class DialCluster {
   constructor() {
     this.pivot = { x: 0, y: 0 };
-    this.outerR = 140;
-    this.relRadii = [1.0, 0.71, 0.44];
-    this.hitHalf = 0.115;            // hit band half-width as fraction of outerR
+    this.rB = 230;                   // middle-arc radius: the feel-critical length
+    this.handed = 'R';
+    this.relRadii = [1.30, 1.0, 0.70];
     this.a = { value: 0.62, glow: 0, glowT: 0 };
     this.b = { value: 0.38, glow: 0, glowT: 0 };
     this.c = { rot: 0, idx: 0, glow: 0, glowT: 0, flash: 0, snapping: false };
     this.lift = 0;                   // move-mode emphasis, 0..1
     this.liftT = 0;
-    this.settle = null;              // {fx,fy,tx,ty,t0} placement animation
+    this.settle = null;              // {fx,fy,frB,tx,ty,trB,t0}
     this.bare = false;               // icon-capture framing: fatter, brighter
   }
 
-  radius(i) { return this.outerR * this.relRadii[i]; }
-  ringWidth() { return this.outerR * (this.bare ? 0.115 : 0.085); }
+  // Angle where value 0 sits, and the direction values grow. Right hand:
+  // 187° (bottom edge) sweeping to 265° (up the right edge). Left hand is the
+  // mirror: 353° sweeping down to 275°.
+  baseAngle() { return ((this.handed === 'L' ? 353 : 187) / 180) * Math.PI; }
+  dir() { return this.handed === 'L' ? -1 : 1; }
+
+  radius(i) { return this.rB * this.relRadii[i]; }
+  ringWidth() {
+    const w = clamp(this.rB * 0.055, 10, 18);
+    return this.bare ? w * 1.35 : w;
+  }
   // Fixed-pixel details (tick strokes, blur radii) scale with cluster size so
   // a 1024px icon render doesn't turn them into hairlines.
-  px(v) { return v * (this.outerR / 140); }
-  mode() { return ((this.c.idx % NUM_MODES) + NUM_MODES) % NUM_MODES; }
+  px(v) { return v * Math.max(0.8, this.rB / 230); }
+  mode() { return this.c.idx; }
   ringState(i) { return i === 0 ? this.a : i === 1 ? this.b : this.c; }
 
   hitTest(x, y) {
     const d = Math.hypot(x - this.pivot.x, y - this.pivot.y);
-    const half = this.outerR * this.hitHalf;
+    const half = Math.max(16, this.ringWidth() * 1.4);
     for (let i = 0; i < 3; i++) {
       if (Math.abs(d - this.radius(i)) <= half) return i;
     }
@@ -54,14 +69,15 @@ export class DialCluster {
 
   setGlow(i, target) { this.ringState(i).glowT = target; }
 
-  // Angular delta from the interaction layer. A/B: value clamps, and the ring's
-  // visible rotation is tied to value, so hitting an end reads as the ring
-  // stopping under the finger. C: rotation is free; nearest detent is the mode.
+  // Angular delta from the interaction layer, already in screen radians.
+  // A/B: the visible window is the whole range, so value moves delta/SWEEP.
+  // C: a bounded gauge — four detents along the same window.
   applyDelta(i, delta) {
+    const d = this.dir() * delta;
     if (i === 2) {
-      this.c.rot += delta;
+      this.c.rot = clamp(this.c.rot + d, 0, SWEEP);
       this.c.snapping = false;
-      const idx = Math.round(this.c.rot / DETENT_STEP);
+      const idx = clamp(Math.round(this.c.rot / DETENT_STEP), 0, NUM_MODES - 1);
       if (idx !== this.c.idx) {
         this.c.idx = idx;
         this.c.flash = 1;           // the visual "click"
@@ -69,15 +85,15 @@ export class DialCluster {
       return;
     }
     const s = this.ringState(i);
-    s.value = Math.min(1, Math.max(0, s.value + (delta / TAU) * GAIN));
+    s.value = clamp(s.value + d / SWEEP, 0, 1);
   }
 
   snapC() { this.c.snapping = true; }
 
-  placeAt(x, y) {
+  placeAt(x, y, rB) {
     this.settle = {
-      fx: this.pivot.x, fy: this.pivot.y,
-      tx: x, ty: y,
+      fx: this.pivot.x, fy: this.pivot.y, frB: this.rB,
+      tx: x, ty: y, trB: rB,
       t0: performance.now(),
     };
   }
@@ -104,17 +120,17 @@ export class DialCluster {
       const e = cubicOut(t);
       this.pivot.x = this.settle.fx + (this.settle.tx - this.settle.fx) * e;
       this.pivot.y = this.settle.fy + (this.settle.ty - this.settle.fy) * e;
+      this.rB = this.settle.frB + (this.settle.trB - this.settle.frB) * e;
       if (t >= 1) this.settle = null;
     }
   }
 
   render(ctx) {
     const { x, y } = this.pivot;
-    const w = this.ringWidth();
 
-    // Scrim seats the cluster on top of whatever the art is doing.
-    const scrimR = this.outerR * 1.4;
-    const g = ctx.createRadialGradient(x, y, this.radius(2) * 0.4, x, y, scrimR);
+    // Scrim seats the arcs on top of whatever the art is doing.
+    const scrimR = this.radius(0) * 1.25;
+    const g = ctx.createRadialGradient(x, y, this.radius(2) * 0.5, x, y, scrimR);
     g.addColorStop(0, `rgba(8,10,13,${(this.bare ? 0.72 : 0.5) + 0.2 * this.lift})`);
     g.addColorStop(1, 'rgba(8,10,13,0)');
     ctx.fillStyle = g;
@@ -154,19 +170,20 @@ export class DialCluster {
     }
   }
 
-  // A/B: knurled ticks rotate with value (rotation = value * GAIN revolutions),
-  // one brighter indicator tooth so position and motion are legible.
+  // A/B: knurled ticks rotate with the value; the brighter indicator tooth
+  // travels the visible window like a gauge needle — value 0 at the bottom
+  // edge, value 1 up the side edge.
   drawContinuousRing(ctx, i, s) {
     const { x, y } = this.pivot;
     const r = this.radius(i);
     const w = this.ringWidth();
     this.drawRingBase(ctx, r, w, s.glow);
 
-    const rot = (s.value / GAIN) * TAU;
-    const count = 28;
+    const rot = s.value * SWEEP;
+    const count = 48; // full circle; the screen clips to the visible arc
     const tl = w * 0.34;
     for (let k = 0; k < count; k++) {
-      const ang = rot + (k / count) * TAU;
+      const ang = this.baseAngle() + this.dir() * (rot + (k / count) * TAU);
       const cx = Math.cos(ang), sy = Math.sin(ang);
       ctx.beginPath();
       ctx.moveTo(x + cx * (r - tl), y + sy * (r - tl));
@@ -184,8 +201,8 @@ export class DialCluster {
     }
   }
 
-  // C: a single pointer dot rotates; fixed detent marks sit just outside the
-  // ring on the panel. Flash pulses on every detent crossing.
+  // C: a bounded gauge. Four fixed detent marks sit on the panel just outside
+  // the arc; the pointer dot snaps between them. Flash pulses on crossings.
   drawSelectorRing(ctx) {
     const { x, y } = this.pivot;
     const r = this.radius(2);
@@ -194,16 +211,17 @@ export class DialCluster {
     this.drawRingBase(ctx, r, w, s.glow);
 
     const markR = r + w * 1.35;
-    for (let k = 0; k < TAU / DETENT_STEP; k++) {
-      const ang = k * DETENT_STEP;
+    for (let k = 0; k < NUM_MODES; k++) {
+      const ang = this.baseAngle() + this.dir() * k * DETENT_STEP;
       ctx.beginPath();
       ctx.arc(x + Math.cos(ang) * markR, y + Math.sin(ang) * markR, this.px(1.6), 0, TAU);
       ctx.fillStyle = COL.tick;
       ctx.fill();
     }
 
-    const px = x + Math.cos(s.rot) * r;
-    const py = y + Math.sin(s.rot) * r;
+    const pAng = this.baseAngle() + this.dir() * s.rot;
+    const px = x + Math.cos(pAng) * r;
+    const py = y + Math.sin(pAng) * r;
     ctx.beginPath();
     ctx.arc(px, py, w * 0.34, 0, TAU);
     ctx.fillStyle = s.glow > 0.02 ? COL.glow + (0.7 + 0.3 * s.glow) + ')' : COL.indicator;

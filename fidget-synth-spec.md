@@ -23,11 +23,14 @@ Two things follow from this:
 
 ## 2. Interaction model
 
-### Concentric dials
+### Concentric arc dials
 
-Three concentric rings, centered on a pivot point placed where a thumb naturally
-rests when holding a phone one-handed — low on the screen, offset toward the
-dominant side. The rings are the entire control surface.
+Three concentric arcs whose shared center is the **thumb's base joint** — just
+off-screen past the bottom corner of the holding hand. The dials read as ring
+segments sweeping across the screen and running off its edges; spatially
+they're concentric with the joint the thumb actually rotates around, so turning
+one is the thumb's natural arc, not a contortion around an on-screen point.
+The arcs are the entire control surface.
 
 - **Angular rotation only.** Touch a ring, drag around the pivot, the value
   changes with the angle. Continuous, no snapping (except the selector dial —
@@ -69,11 +72,13 @@ Feel-critical enough to pin down here rather than leave to the build:
 - **Delta tracking, not absolute.** Touching a ring never jumps the value to
   the touch angle; the drag applies angular delta from wherever the finger
   landed. Otherwise every touch is a glitch.
-- **Endless rotation.** Rings spin like rotary encoders, with the underlying
-  parameter clamped at its ends. Bounded knobs would need visible end-stops,
-  which pulls toward markings and labels this app doesn't have.
-- **Gain:** start at one full revolution ≈ one full parameter sweep, then tune
-  by hand. Whatever wins, record the number — this is *the* feel constant.
+- **The visible window is the whole range.** From a corner pivot roughly 78° of
+  arc is on screen, and A/B sweep their full range across exactly that window,
+  gauge-style — value 0 where the arc leaves the bottom edge, value 1 where it
+  leaves the side. The indicator tooth's position *is* the value; no endless
+  spinning. Dial C's detents sit along the same window.
+- **Gain:** full sweep = the visible window (~78°). Tune by hand from there.
+  Whatever wins, record the number — this is *the* feel constant.
 - **Mode switches don't reset anything.** When Dial C turns, A and B keep their
   physical positions and remap meaning. No snapping to defaults.
 - **Single-touch only.** One thumb is the whole design; secondary touches are
@@ -88,12 +93,14 @@ be settable, and it has to be settable without a settings screen or the word
 
 **Recommended approach — the first touch places the cluster.**
 
-On first launch the intro animation plays with the ring cluster centered and
-low. The moment the user puts a finger down anywhere on the screen, the cluster
-animates smoothly to that point and orients for that side of the screen. That
-single gesture sets handedness *and* pivot position *and* is the same gesture
-they were going to make anyway. There is no selection step, because the choice
-is inferred from the first thing they naturally do.
+On first launch the intro animation plays from the default pose (right-hand
+corner, mid radius). The moment the user puts a finger down anywhere on the
+screen, that point is read as the thumb tip at rest: its side of the screen
+picks the corner (handedness), and its distance from that corner becomes the
+middle arc's radius. The cluster animates smoothly into that pose. One gesture
+sets handedness *and* reach, and it's the same gesture they were going to make
+anyway. There is no selection step, because the choice is inferred from the
+first thing they naturally do.
 
 Persist to `localStorage`; on subsequent launches the cluster is already in
 place and the intro plays there. On those later launches a touch during the
@@ -109,9 +116,10 @@ Two details that matter:
 - The settle animation should be quick and confident (~250ms, eased), not a
   drifting float. It should read as the interface *snapping to your hand*, which
   is a nice moment in itself.
-- Ring radii may need to shrink slightly when the pivot is near a screen edge so
-  the outer ring doesn't run off-screen. Handle this by clamping the pivot
-  inward rather than by deforming the rings.
+- The arc radius clamps to a sensible band (roughly 0.42–0.78 of the short
+  screen dimension) so a touch very near or very far from the corner can't
+  produce unusable geometry. The arcs running off-screen is the design, not a
+  problem to clamp away.
 
 **Fallback if first-touch inference tests badly:** play the intro animation
 mirrored on both halves of the screen simultaneously and let the user tap the
@@ -221,9 +229,9 @@ This does two jobs:
    not a preamble to skip.
 
 Should be interruptible — a touch during the animation takes control immediately.
-On first launch that interrupting touch is also what sets handedness and pivot
-position (see §2), so the animation must look right playing from a centered
-cluster as well as from an off-center one.
+On first launch that interrupting touch is also what sets handedness and reach
+(see §2), so the animation must look right playing from the default right-hand
+pose as well as from any re-posed geometry.
 
 ## 6. Sound
 
