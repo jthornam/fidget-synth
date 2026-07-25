@@ -14,29 +14,28 @@ the §4 bar.
 
 ## 1. Organic — flow, growth, soft gradients
 
-The shipped starting point (see `js/aesthetics.js`).
+1. **Warped bands** — domain-warped fbm (`fbm(p + fbm(p))`) with raking light
+   from a finite-difference gradient. A: frequency. B: warp depth.
+2. **Growth rings** — radial distance field distorted by fbm, banded with an
+   asymmetric profile. A: ring frequency. B: distortion.
+3. **Breathing cells** — voronoi with sinusoidally drifting sites, edge-lit,
+   wet specular highlight at each site. A: cell scale. B: pulse depth.
+4. **Silk flow** — fbm stretched hard along a rotatable axis, with a fine
+   thread overlay. A: scale. B: grain angle. (Replaced the planned stripe
+   interference, which read geometric rather than organic.)
 
-1. **Warped bands** — domain-warped fbm (`fbm(p + fbm(p))`). A: frequency.
-   B: warp depth. The classic for a reason; at high warp it goes fluid.
-2. **Growth rings** — radial distance field distorted by fbm, banded.
-   A: ring frequency. B: distortion. Reads as tree rings / topography.
-3. **Breathing cells** — voronoi with sinusoidally drifting sites, edge-lit.
-   A: cell scale. B: pulse depth. The phase drift makes it feel alive at rest.
-4. **Stripe interference** — two rotated sine fields multiplied. A: frequency.
-   B: beam angle. Moiré-like; cheap and surprisingly deep.
-
-To fully realize (build step 3): softer palettes (narrower cosine-palette
-amplitude), gradient-based shading on the bands mode, and a wet specular hint
-on cells.
+All four use a muted natural cosine palette (narrower amplitude than stock).
 
 ## 2. Sci-fi — hard geometry, precision, luminous edges
 
 Render strategy override: dark field, emissive edges, sharp `smoothstep`
 transitions — lines glow, surfaces stay near-black.
 
-1. **Contour circuitry** — fbm iso-lines (`fract(fbm*n)` thresholded to thin
-   glowing lines), with occasional right-angle quantization of the field.
-   A: contour density. B: quantization amount (flowing → circuit-board).
+1. **Tactical topo** — fbm iso-lines (`fract(fbm*n)` thresholded to glowing
+   contours) over a fine graticule with pulsing waypoint blips. A: contour
+   density. B: graticule density. (The planned domain-quantized "circuitry"
+   variant produced hard tile seams — snapping coordinates before fbm is C0
+   discontinuous at every cell edge — and was dropped.)
 2. **Greebled panels** — recursive grid subdivision by hash (3–4 levels),
    each cell edge-lit, sparse cells glowing. A: subdivision depth bias.
    B: emissive fraction.
@@ -79,9 +78,12 @@ structurally interesting, not just a CRT filter.
 1. **Plotter contours** — thin single-color iso-lines of an fbm height field
    with hand-wobble jitter, like pen-plotter output. A: line spacing.
    B: wobble.
-2. **Lissajous phosphor** — distance-to-curve glow for a Lissajous figure
-   (analytic distance approximation, no marching). A: frequency ratio
-   (morphs the figure). B: decay length (crisp trace → smeared phosphor).
+2. **Scope trace** — phosphor glow around a single-valued waveform
+   (sum of sines), drawn four times at trailing phases for persistence.
+   A: waveform complexity. B: persistence (ghost spread + decay length).
+   (Replaced the planned Lissajous: distance-to-curve needs ~100 samples per
+   pixel to not render as dots, which busts the mobile budget; a y=f(x) trace
+   is exact and cheap.)
 3. **Dither field** — an fbm field quantized through an 8×8 Bayer matrix to
    two colors, macro-blocks drifting with phase. A: field scale.
    B: quantization levels (1-bit → 4 grays).
