@@ -6,7 +6,14 @@ reaction-diffusion, particle systems, feedback buffers) is eligible, only
 things expressible in a fragment shader. Each mode needs 2–3 genuinely
 independent parameters, no dead zones at the extremes, and 60fps on an
 iPhone 12 (practical budget: ≤5 fbm octaves, 3×3 cellular search, no
-raymarching loops past ~32 steps).
+raymarching loops past ~40 steps). And no dial may be a bare rotation or bare
+zoom of the image — every parameter must change structure, even when it also
+scales or turns something.
+
+Particle *fields* are in-bounds despite the no-state rule: hash-scattered
+sites whose positions are pure functions of phase (linear drift, micro-orbits)
+read as particles without being a simulation. Escape-time fractals are
+in-bounds too — an iteration loop is pure. Both are represented below.
 
 Every aesthetic gets its own 3–4 modes (per-aesthetic modes, spec §2). The
 aesthetics differ in *structure and rendering strategy*, not palette — that's
@@ -21,10 +28,12 @@ the §4 bar.
 3. **Breathing cells** — voronoi with sinusoidally drifting sites, edge-lit,
    wet specular highlight at each site. A: cell scale. B: pulse depth.
 4. **Silk flow** — fbm stretched hard along a rotatable axis, with a fine
-   thread overlay. A: scale. B: grain angle. (Replaced the planned stripe
-   interference, which read geometric rather than organic.)
+   thread overlay. A: scale. B: grain angle *and* fiber tightness. (Replaced
+   the planned stripe interference, which read geometric rather than organic.)
+5. **Spore drift** — three parallax layers of hash-scattered soft particles
+   with per-cell micro-orbits. A: density/size. B: orbit turbulence.
 
-All four use a muted natural cosine palette (narrower amplitude than stock).
+All five use a muted natural cosine palette (narrower amplitude than stock).
 
 ## 2. Sci-fi — hard geometry, precision, luminous edges
 
@@ -42,6 +51,9 @@ transitions — lines glow, surfaces stay near-black.
 3. **Warp field** — polar starfield: radial streaks from hash-placed points,
    length modulated by phase drift. A: density. B: streak curvature (straight
    jump → spiral).
+4. **Julia set** — escape-time iteration (40 steps) with emissive contour
+   bands outside and orbit-trap filaments inside. A: angle of the complex
+   parameter c (shape morph). B: |c| (connectivity — solid blob → dust).
 
 ## 3. Abstract geometric — flat, constructivist, hard-edged
 

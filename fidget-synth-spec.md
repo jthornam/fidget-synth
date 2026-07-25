@@ -69,6 +69,10 @@ tick permitted in §6.
 
 Feel-critical enough to pin down here rather than leave to the build:
 
+- **Hit zones are bands, not strokes.** Each dial's touch area runs from its
+  own outside edge inward to the next arc's outside edge; the innermost dial
+  takes everything inside its edge. Landing a thumb on the drawn arc itself
+  must never be required.
 - **Delta tracking, not absolute.** Touching a ring never jumps the value to
   the touch angle; the drag applies angular delta from wherever the finger
   landed. Otherwise every touch is a glitch.
@@ -174,7 +178,9 @@ double-tap.)
 here and want your take. Constraints for your recommendation: it must expose 2–3
 meaningfully independent parameters per mode, degrade gracefully at parameter
 extremes (no dead zones where the canvas goes blank or solid), and run at 60fps
-on mobile.
+on mobile. **No dial may be a bare rotation or a bare zoom** of the image —
+every parameter has to change structure (count, depth, distribution,
+corruption), even if it also scales or turns something.
 
 ## 4. Aesthetics
 

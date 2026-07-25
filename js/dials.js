@@ -59,13 +59,17 @@ export class DialCluster {
   mode() { return this.c.idx; }
   ringState(i) { return i === 0 ? this.a : i === 1 ? this.b : this.c; }
 
+  // Hit zones are bands, not strokes: each dial owns everything from its own
+  // outside edge inward to the next arc's outside edge; the innermost dial
+  // takes everything inside its edge. Nobody lands a thumb on a 12px arc.
   hitTest(x, y) {
     const d = Math.hypot(x - this.pivot.x, y - this.pivot.y);
-    const half = Math.max(16, this.ringWidth() * 1.4);
-    for (let i = 0; i < 3; i++) {
-      if (Math.abs(d - this.radius(i)) <= half) return i;
-    }
-    return null;
+    const w = this.ringWidth();
+    const outer = (i) => this.radius(i) + w / 2;
+    if (d > outer(0) + w * 1.2) return null; // background
+    if (d > outer(1)) return 0;
+    if (d > outer(2)) return 1;
+    return 2;
   }
 
   setGlow(i, target) { this.ringState(i).glowT = target; }
