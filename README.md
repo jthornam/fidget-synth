@@ -9,3 +9,4 @@ Live: https://fidget-synth.pages.dev
 - `node tools/render-assets.mjs` regenerates the link card (`og.png`) and the
   icon set by screenshotting the page itself (needs Chrome installed).
 - Design spec: [fidget-synth-spec.md](fidget-synth-spec.md)
+- Generator algorithm plans: [ALGORITHMS.md](ALGORITHMS.md)

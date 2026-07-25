@@ -116,7 +116,7 @@ Two details that matter:
 - The settle animation should be quick and confident (~250ms, eased), not a
   drifting float. It should read as the interface *snapping to your hand*, which
   is a nice moment in itself.
-- The arc radius clamps to a sensible band (roughly 0.42–0.78 of the short
+- The arc radius clamps to a sensible band (roughly 0.52–0.95 of the short
   screen dimension) so a touch very near or very far from the corner can't
   produce unusable geometry. The arcs running off-screen is the design, not a
   problem to clamp away.

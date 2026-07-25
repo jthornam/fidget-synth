@@ -3,15 +3,13 @@
 // The rings are drawn as full circles and clipped by the screen, so they read
 // as arcs running off the edges. Ring 0 = A (outer), 1 = B (middle),
 // 2 = C (inner, mode selector).
-export const NUM_MODES = 4;
 const TAU = Math.PI * 2;
 
-// Feel constants — spec §2 says record what wins.
+// Feel constant — spec §2 says record what wins.
 // The visible angular window from a bottom-corner pivot is ~78°; that window
-// IS the full sweep: A/B run their whole range across it, and C's four
-// detents sit along it like a gauge.
+// IS the full sweep: A/B run their whole range across it, and C's detents
+// (one per mode of the active aesthetic) sit along it like a gauge.
 export const SWEEP = (78 / 180) * Math.PI;
-export const DETENT_STEP = SWEEP / (NUM_MODES - 1);
 
 const COL = {
   under: 'rgba(8,10,13,0.55)',
@@ -39,7 +37,10 @@ export class DialCluster {
     this.liftT = 0;
     this.settle = null;              // {fx,fy,frB,tx,ty,trB,t0}
     this.bare = false;               // icon-capture framing: fatter, brighter
+    this.modesCount = 4;             // set from the active aesthetic
   }
+
+  detentStep() { return SWEEP / (this.modesCount - 1); }
 
   // Angle where value 0 sits, and the direction values grow. Right hand:
   // 187° (bottom edge) sweeping to 265° (up the right edge). Left hand is the
@@ -77,7 +78,7 @@ export class DialCluster {
     if (i === 2) {
       this.c.rot = clamp(this.c.rot + d, 0, SWEEP);
       this.c.snapping = false;
-      const idx = clamp(Math.round(this.c.rot / DETENT_STEP), 0, NUM_MODES - 1);
+      const idx = clamp(Math.round(this.c.rot / this.detentStep()), 0, this.modesCount - 1);
       if (idx !== this.c.idx) {
         this.c.idx = idx;
         this.c.flash = 1;           // the visual "click"
@@ -107,7 +108,7 @@ export class DialCluster {
     this.c.flash = Math.max(0, this.c.flash - dt * 6);
 
     if (this.c.snapping) {
-      const target = this.c.idx * DETENT_STEP;
+      const target = this.c.idx * this.detentStep();
       this.c.rot += (target - this.c.rot) * (1 - Math.exp(-dt * 16));
       if (Math.abs(target - this.c.rot) < 0.001) {
         this.c.rot = target;
@@ -211,8 +212,8 @@ export class DialCluster {
     this.drawRingBase(ctx, r, w, s.glow);
 
     const markR = r + w * 1.35;
-    for (let k = 0; k < NUM_MODES; k++) {
-      const ang = this.baseAngle() + this.dir() * k * DETENT_STEP;
+    for (let k = 0; k < this.modesCount; k++) {
+      const ang = this.baseAngle() + this.dir() * k * this.detentStep();
       ctx.beginPath();
       ctx.arc(x + Math.cos(ang) * markR, y + Math.sin(ang) * markR, this.px(1.6), 0, TAU);
       ctx.fillStyle = COL.tick;

@@ -1,5 +1,6 @@
-import { DialCluster, DETENT_STEP, NUM_MODES } from './dials.js';
+import { DialCluster } from './dials.js';
 import { ArtGen } from './gen.js';
+import { AESTHETICS } from './aesthetics.js';
 
 const STORE_KEY = 'fidget-synth.pivot.v2';
 const LONGPRESS_MS = 450;
@@ -20,9 +21,17 @@ const ctx = uiCanvas.getContext('2d');
 const gen = new ArtGen(artCanvas, POSTER != null ? parseFloat(POSTER) : null);
 const cluster = new DialCluster();
 
+// The active aesthetic. Selection UI is deliberately last (spec §4); until
+// then it's index 0, with ?aes=<n> as a dev-only override for testing modules.
+const aesthetic = AESTHETICS[
+  Math.min(AESTHETICS.length - 1, Math.max(0, parseInt(Q.get('aes'), 10) || 0))
+];
+gen.use(aesthetic);
+cluster.modesCount = aesthetic.modes;
+
 if (Q.get('mode') != null) {
-  cluster.c.idx = Math.min(NUM_MODES - 1, Math.max(0, parseInt(Q.get('mode'), 10) || 0));
-  cluster.c.rot = cluster.c.idx * DETENT_STEP;
+  cluster.c.idx = Math.min(cluster.modesCount - 1, Math.max(0, parseInt(Q.get('mode'), 10) || 0));
+  cluster.c.rot = cluster.c.idx * cluster.detentStep();
 }
 if (BARE) {
   cluster.bare = true;
@@ -48,7 +57,7 @@ function cornerPivot(handed) {
 // Middle-arc radius limits, as fractions of the short screen dimension.
 function clampRB(r) {
   const m = Math.min(W, H);
-  return Math.min(0.78 * m, Math.max(0.42 * m, r));
+  return Math.min(0.95 * m, Math.max(0.52 * m, r));
 }
 
 function persistPivot(rB = cluster.rB) {
@@ -89,7 +98,7 @@ function resize() {
   if (POSTER != null) {
     cluster.handed = 'R';
     cluster.pivot = cornerPivot('R');
-    cluster.rB = Math.min(W, H) * 0.55;
+    cluster.rB = Math.min(W, H) * 0.62;
     return;
   }
 
@@ -97,7 +106,7 @@ function resize() {
   cluster.pivot = cornerPivot(cluster.handed);
   cluster.rB = stored
     ? clampRB(stored.rBn * Math.min(W, H))
-    : clampRB(Math.min(W, H) * 0.62);
+    : clampRB(Math.min(W, H) * 0.75);
 }
 
 if (POSTER != null || BARE) {
