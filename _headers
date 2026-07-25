@@ -1,0 +1,19 @@
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# A stale link card is worse than a chattier cache.
+/og.png
+  Cache-Control: public, max-age=300
+
+/icon-1024.png
+  Cache-Control: public, max-age=86400
+
+/icon-512.png
+  Cache-Control: public, max-age=86400
+
+/icon-192.png
+  Cache-Control: public, max-age=86400
+
+/icon-180.png
+  Cache-Control: public, max-age=86400

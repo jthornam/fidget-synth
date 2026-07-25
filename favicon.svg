@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Hand-drawn: at 16px a screenshot is a smudge. Two rings + the amber
+       pointer dot is the whole idea of the app in three marks. -->
+  <rect width="32" height="32" rx="7" fill="#0b0e11"/>
+  <circle cx="16" cy="16" r="11" fill="none" stroke="#6b7683" stroke-width="2.5"/>
+  <circle cx="16" cy="16" r="5.5" fill="none" stroke="#6b7683" stroke-width="2.5"/>
+  <circle cx="25" cy="16" r="2.7" fill="#ffb266"/>
+</svg>
