@@ -11,14 +11,15 @@ const TAU = Math.PI * 2;
 // (one per mode of the active aesthetic) sit along it like a gauge.
 export const SWEEP = (78 / 180) * Math.PI;
 
+// Neutral furniture tones; everything accent-colored comes from this.accent
+// (set from the active aesthetic) via this.col().
 const COL = {
-  under: 'rgba(8,10,13,0.55)',
-  track: '#23282e',
-  trackLit: '#2d333a',
-  tick: '#49525c',
-  indicator: '#9a7a50',
-  glow: 'rgba(255,178,102,',   // amber phosphor; alpha appended
-  flash: 'rgba(255,217,168,',
+  under: 'rgba(6,8,10,0.40)',
+  band: 'rgba(13,16,20,0.32)',
+  bandLit: 'rgba(16,20,25,0.45)',
+  edge: 'rgba(200,210,222,0.10)',
+  tick: 'rgba(148,160,172,0.50)',
+  tickLit: 'rgba(190,200,212,0.75)',
 };
 
 function cubicOut(t) { return 1 - Math.pow(1 - t, 3); }
@@ -38,9 +39,27 @@ export class DialCluster {
     this.settle = null;              // {fx,fy,frB,tx,ty,trB,t0}
     this.bare = false;               // icon-capture framing: fatter, brighter
     this.modesCount = 4;             // set from the active aesthetic
+    this.accent = [255, 178, 102];   // set from the active aesthetic
   }
 
   detentStep() { return SWEEP / (this.modesCount - 1); }
+
+  // Accent rgba; l lightens toward white (for flash pulses).
+  col(a, l = 0) {
+    const c = this.accent.map((v) => Math.round(v + (255 - v) * l));
+    return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')';
+  }
+
+  // Set C's rotation directly — drag and intro choreography share this.
+  // Clamps to the sweep, updates the detent index, flashes on crossings.
+  setCRot(rot) {
+    this.c.rot = clamp(rot, 0, SWEEP);
+    const idx = clamp(Math.round(this.c.rot / this.detentStep()), 0, this.modesCount - 1);
+    if (idx !== this.c.idx) {
+      this.c.idx = idx;
+      this.c.flash = 1;
+    }
+  }
 
   // Angle where value 0 sits, and the direction values grow. Right hand:
   // 187° (bottom edge) sweeping to 265° (up the right edge). Left hand is the
@@ -80,13 +99,8 @@ export class DialCluster {
   applyDelta(i, delta) {
     const d = this.dir() * delta;
     if (i === 2) {
-      this.c.rot = clamp(this.c.rot + d, 0, SWEEP);
       this.c.snapping = false;
-      const idx = clamp(Math.round(this.c.rot / this.detentStep()), 0, this.modesCount - 1);
-      if (idx !== this.c.idx) {
-        this.c.idx = idx;
-        this.c.flash = 1;           // the visual "click"
-      }
+      this.setCRot(this.c.rot + d);
       return;
     }
     const s = this.ringState(i);
@@ -136,7 +150,7 @@ export class DialCluster {
     // Scrim seats the arcs on top of whatever the art is doing.
     const scrimR = this.radius(0) * 1.25;
     const g = ctx.createRadialGradient(x, y, this.radius(2) * 0.5, x, y, scrimR);
-    g.addColorStop(0, `rgba(8,10,13,${(this.bare ? 0.72 : 0.5) + 0.2 * this.lift})`);
+    g.addColorStop(0, `rgba(8,10,13,${(this.bare ? 0.72 : 0.22) + 0.2 * this.lift})`);
     g.addColorStop(1, 'rgba(8,10,13,0)');
     ctx.fillStyle = g;
     ctx.beginPath();
@@ -148,27 +162,38 @@ export class DialCluster {
     this.drawSelectorRing(ctx);
   }
 
+  // Translucent glass bands: the art reads through them. Shape is carried by
+  // the soft under-shadow, two thin edge lines, and the knurl ticks — not by
+  // an opaque fill.
   drawRingBase(ctx, r, w, glow) {
     const { x, y } = this.pivot;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, TAU);
-    ctx.lineWidth = w * 1.65;
+    ctx.lineWidth = w * 1.7;
     ctx.strokeStyle = COL.under;
     ctx.stroke();
 
     ctx.beginPath();
     ctx.arc(x, y, r, 0, TAU);
     ctx.lineWidth = w;
-    ctx.strokeStyle = glow > 0.02 ? COL.trackLit : COL.track;
+    ctx.strokeStyle = glow > 0.02 ? COL.bandLit : COL.band;
     ctx.stroke();
+
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = COL.edge;
+    for (const er of [r - w / 2, r + w / 2]) {
+      ctx.beginPath();
+      ctx.arc(x, y, er, 0, TAU);
+      ctx.stroke();
+    }
 
     if (glow > 0.02) {
       ctx.save();
       ctx.beginPath();
       ctx.arc(x, y, r, 0, TAU);
       ctx.lineWidth = w * 1.12;
-      ctx.strokeStyle = COL.glow + ((this.bare ? 0.85 : 0.55) * glow) + ')';
-      ctx.shadowColor = COL.glow + glow + ')';
+      ctx.strokeStyle = this.col((this.bare ? 0.85 : 0.50) * glow);
+      ctx.shadowColor = this.col(glow);
       ctx.shadowBlur = this.px(18) * glow + this.px(10) * this.lift;
       ctx.stroke();
       ctx.restore();
@@ -195,12 +220,10 @@ export class DialCluster {
       ctx.lineTo(x + cx * (r + tl), y + sy * (r + tl));
       if (k === 0) {
         ctx.lineWidth = this.px(2.5);
-        ctx.strokeStyle = s.glow > 0.02
-          ? COL.glow + (0.6 + 0.4 * s.glow) + ')'
-          : COL.indicator;
+        ctx.strokeStyle = this.col(0.55 + 0.45 * s.glow);
       } else {
         ctx.lineWidth = this.px(1.5);
-        ctx.strokeStyle = s.glow > 0.02 ? '#5d6873' : COL.tick;
+        ctx.strokeStyle = s.glow > 0.02 ? COL.tickLit : COL.tick;
       }
       ctx.stroke();
     }
@@ -229,9 +252,9 @@ export class DialCluster {
     const py = y + Math.sin(pAng) * r;
     ctx.beginPath();
     ctx.arc(px, py, w * 0.34, 0, TAU);
-    ctx.fillStyle = s.glow > 0.02 ? COL.glow + (0.7 + 0.3 * s.glow) + ')' : COL.indicator;
+    ctx.fillStyle = this.col(0.65 + 0.35 * s.glow);
     if (s.glow > 0.02) {
-      ctx.shadowColor = COL.glow + s.glow + ')';
+      ctx.shadowColor = this.col(s.glow);
       ctx.shadowBlur = this.px(12) * s.glow;
     }
     ctx.fill();
@@ -241,7 +264,7 @@ export class DialCluster {
       ctx.beginPath();
       ctx.arc(x, y, r, 0, TAU);
       ctx.lineWidth = w * (1.2 + 0.5 * s.flash);
-      ctx.strokeStyle = COL.flash + (0.55 * s.flash) + ')';
+      ctx.strokeStyle = this.col(0.55 * s.flash, 0.5);
       ctx.stroke();
     }
   }

@@ -22,13 +22,31 @@ const ctx = uiCanvas.getContext('2d');
 const gen = new ArtGen(artCanvas, POSTER != null ? parseFloat(POSTER) : null);
 const cluster = new DialCluster();
 
-// The active aesthetic. Selection UI is deliberately last (spec §4); until
-// then it's index 0, with ?aes=<n> as a dev-only override for testing modules.
-const aesthetic = AESTHETICS[
-  Math.min(AESTHETICS.length - 1, Math.max(0, parseInt(Q.get('aes'), 10) || 0))
-];
-gen.use(aesthetic);
-cluster.modesCount = aesthetic.modes;
+// Aesthetic selection (spec §4): a wordless dot strip in the corner opposite
+// the thumb. Decoupled — the strip, the ?aes= override, and persistence all
+// route through setAesthetic().
+const AES_KEY = 'fidget-synth.aes.v1';
+let aesIndex = 0;
+function setAesthetic(i, persist) {
+  aesIndex = Math.min(AESTHETICS.length - 1, Math.max(0, i));
+  const aes = AESTHETICS[aesIndex];
+  gen.use(aes);
+  cluster.modesCount = aes.modes;
+  cluster.accent = aes.accent;
+  if (cluster.c.idx > aes.modes - 1) cluster.c.idx = aes.modes - 1;
+  cluster.c.rot = cluster.c.idx * cluster.detentStep();
+  cluster.c.flash = Math.max(cluster.c.flash, 0.6);
+  if (persist) {
+    try { localStorage.setItem(AES_KEY, String(aesIndex)); } catch (e) { /* ignore */ }
+  }
+}
+{
+  let initial = parseInt(Q.get('aes'), 10);
+  if (!isFinite(initial)) {
+    try { initial = parseInt(localStorage.getItem(AES_KEY), 10) || 0; } catch (e) { initial = 0; }
+  }
+  setAesthetic(initial, false);
+}
 
 if (Q.get('mode') != null) {
   cluster.c.idx = Math.min(cluster.modesCount - 1, Math.max(0, parseInt(Q.get('mode'), 10) || 0));
@@ -122,6 +140,91 @@ if (POSTER != null || BARE) {
 resize();
 window.addEventListener('resize', resize);
 
+// --- Aesthetic selector strip ----------------------------------------------
+const SELECTOR_Y = 56; // clears the status bar / notch region
+function selectorVisible() {
+  return !BARE && !(POSTER != null && phaseHold != null);
+}
+function selectorDots() {
+  const fromLeft = cluster.handed === 'R'; // opposite corner from the thumb
+  const dots = [];
+  for (let i = 0; i < AESTHETICS.length; i++) {
+    const x = fromLeft ? 26 + i * 26 : W - 26 - i * 26;
+    dots.push({ x, y: SELECTOR_Y, i });
+  }
+  return dots;
+}
+function drawSelector() {
+  for (const d of selectorDots()) {
+    const act = d.i === aesIndex;
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, act ? 4.5 : 3.2, 0, Math.PI * 2);
+    if (act) {
+      ctx.fillStyle = cluster.col(0.95);
+      ctx.shadowColor = cluster.col(0.9);
+      ctx.shadowBlur = 10;
+    } else {
+      ctx.fillStyle = 'rgba(150,162,174,0.45)';
+    }
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+}
+
+// --- Intro animation (spec §5) ----------------------------------------------
+// The dials play themselves for ~2.6s on every open, glowing as they move —
+// wordless tutorial and standalone payoff. Any touch interrupts instantly.
+let intro = null;
+const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+function startIntro() {
+  if (POSTER != null || BARE) return;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  let target = Math.floor(Math.random() * cluster.modesCount);
+  if (target === cluster.c.idx && cluster.modesCount > 1) {
+    target = (target + 1) % cluster.modesCount;
+  }
+  intro = {
+    t0: null, // set on the first rendered frame, so a hidden/backgrounded
+              // load doesn't burn the intro before anyone sees it
+    D: 2600,
+    a: [cluster.a.value, rnd(0.15, 0.85), rnd(0.15, 0.85)],
+    b: [cluster.b.value, rnd(0.15, 0.85), rnd(0.15, 0.85)],
+    c0: cluster.c.rot,
+    cTarget: target,
+  };
+}
+function stopIntro() {
+  if (!intro) return;
+  intro = null;
+  cluster.a.glowT = 0;
+  cluster.b.glowT = 0;
+  cluster.c.glowT = 0;
+  cluster.snapC();
+}
+function updateIntro(now) {
+  if (intro.t0 == null) intro.t0 = now;
+  const e = (now - intro.t0) / intro.D;
+  if (e >= 1) { stopIntro(); return; }
+  const prog = (s, en) => Math.min(1, Math.max(0, (e - s) / (en - s)));
+  const wp = (arr, t) => (t < 0.5
+    ? arr[0] + (arr[1] - arr[0]) * easeInOut(t * 2)
+    : arr[1] + (arr[2] - arr[1]) * easeInOut(t * 2 - 1));
+  cluster.a.value = wp(intro.a, prog(0.05, 0.55));
+  cluster.a.glowT = e > 0.05 && e < 0.55 ? 1 : 0;
+  cluster.b.value = wp(intro.b, prog(0.30, 0.85));
+  cluster.b.glowT = e > 0.30 && e < 0.85 ? 1 : 0;
+  const cp = prog(0.55, 0.88);
+  if (cp > 0) {
+    const target = intro.cTarget * cluster.detentStep();
+    cluster.setCRot(intro.c0 + (target - intro.c0) * easeInOut(cp));
+  }
+  cluster.c.glowT = e > 0.55 && e < 0.88 ? 1 : 0;
+}
+startIntro();
+
+// Dev/test handle; harmless in production, no UI depends on it.
+window.__fs = { cluster, introActive: () => !!intro };
+
 // --- Interaction ------------------------------------------------------------
 // Single-touch only (spec §2): one active pointer, all others ignored.
 let active = null; // {type:'dial'|'bg'|'move', id, ...}
@@ -154,6 +257,16 @@ function onDown(e) {
     phaseHold = null;
   }
   const x = e.clientX, y = e.clientY;
+  stopIntro();
+
+  if (selectorVisible()) {
+    for (const d of selectorDots()) {
+      if (Math.hypot(x - d.x, y - d.y) < 20) {
+        setAesthetic(d.i, true);
+        return;
+      }
+    }
+  }
 
   if (!placed) {
     // The first touch places the cluster and sets handedness (spec §2).
@@ -232,6 +345,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
 
+  if (intro) updateIntro(now);
   cluster.update(now, dt);
   gen.render(phaseHold != null ? phaseHold : now / 1000 - phaseBase, {
     a: cluster.a.value,
@@ -242,6 +356,7 @@ function frame(now) {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, W, H);
   cluster.render(ctx);
+  if (selectorVisible()) drawSelector();
 
   requestAnimationFrame(frame);
 }

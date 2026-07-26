@@ -15,6 +15,7 @@ export const ORGANIC = {
   id: 'organic',
   name: 'Organic',
   modes: 5,
+  accent: [255, 178, 102],
   art: `
 // Muted natural ramp — narrower amplitude than the stock palette.
 vec3 opal(float x, float shift) {
@@ -124,6 +125,7 @@ export const SCIFI = {
   id: 'scifi',
   name: 'Sci-fi',
   modes: 4,
+  accent: [120, 210, 255],
   art: `
 vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
   vec3 bg = vec3(0.015, 0.02, 0.035);
@@ -227,7 +229,8 @@ vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
 export const GEOMETRIC = {
   id: 'geometric',
   name: 'Abstract geometric',
-  modes: 3,
+  modes: 4,
+  accent: [230, 90, 50],
   art: `
 // Five-step constructivist palette, ordered by how common each should be:
 // cream ground first, then three seed colors, ink last so the skew dial
@@ -277,7 +280,7 @@ vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
     }
     col = gcol(acc, shift);
 
-  } else {
+  } else if (mode < 2.5) {
     // Wedge rotation. A: wedge count. B: origin eccentricity.
     float cnt = floor(mix(3.0, 16.0, A));
     vec2 o = mix(0.0, 0.55, B)
@@ -286,6 +289,24 @@ vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
     float w = floor((atan(p.y, p.x) / 6.2831 + 0.5) * cnt);
     float ring = floor(length(p) * mix(2.0, 5.0, fract(shift * 7.0)));
     col = gcol(hash(vec2(w, ring)) * 5.0, shift);
+
+  } else {
+    // Kaleidoscopic fold (IFS): abs-translate-rotate, six folds, flat bands
+    // in folded space. A: fold rotation (symmetry family). B: fold offset
+    // (structure density).
+    vec2 p = uv * 1.7;
+    float fa = mix(0.35, 1.05, A) + t * 0.004;
+    mat2 R = mat2(cos(fa), -sin(fa), sin(fa), cos(fa));
+    float off = mix(0.28, 0.62, B);
+    for (int i = 0; i < 6; i++) {
+      p = abs(p) - off;
+      p = R * p;
+    }
+    float d = length(p);
+    float k = floor(mod(d * 3.0, 5.0));
+    col = gcol(k, shift);
+    float e = abs(fract(d * 3.0) - 0.5);
+    col = mix(vec3(0.10, 0.10, 0.11), col, smoothstep(0.04, 0.09, e));
   }
 
   return col;
@@ -297,6 +318,7 @@ export const GLITCH = {
   id: 'glitch',
   name: 'Glitch',
   modes: 3,
+  accent: [255, 70, 160],
   art: `
 // The base image the corruption operators eat. Vivid on purpose.
 vec3 gbase(vec2 p, float shift) {
@@ -352,6 +374,7 @@ export const RETRO = {
   id: 'retro',
   name: 'Retro computer',
   modes: 3,
+  accent: [140, 255, 170],
   art: `
 // Seed-picked phosphor ink on near-black.
 vec3 ink(float shift) {

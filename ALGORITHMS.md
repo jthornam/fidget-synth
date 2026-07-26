@@ -67,6 +67,9 @@ palette quantized from the seed; anti-aliased edges via `fwidth`.
 3. **Wedge rotation** — screen split into angular wedges from an off-center
    origin, alternating fills, phase drifts the origin slowly. A: wedge count.
    B: origin eccentricity.
+4. **Kaleidoscopic fold** — six abs-translate-rotate IFS folds, flat bands by
+   folded distance with dark grout. A: fold rotation (symmetry family).
+   B: fold offset (structure density).
 
 ## 4. Glitch — displacement, channel separation, controlled corruption
 

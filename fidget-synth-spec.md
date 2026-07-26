@@ -198,23 +198,21 @@ different palette swapped in, that's a failure. Each aesthetic can override
 rendering strategy, not just color, and each defines its own Dial C mode set
 (§2) — modes don't have to translate across aesthetics.
 
-### Aesthetic selection — unresolved
+### Aesthetic selection — v1 resolved
 
-I don't know how this should work yet, and I don't want to guess wrong before
-touching it. **Build it as a simple discrete control in a corner, and keep it
-architecturally decoupled** so the selection UI can be swapped without touching
-the generator or the dial system.
+A strip of small dots in the top corner *opposite* the thumb (top-left for a
+right-hander) — one per aesthetic, the active one glowing in that aesthetic's
+accent color. Tap a dot to switch. Wordless, one tap, and far enough from the
+arcs that it can't be hit by accident. The choice persists across launches.
 
-Options I've considered and my read on each:
+Kept architecturally decoupled as originally required: the strip, the ?aes=
+dev override, and persistence all route through one setAesthetic() call, so
+this UI can be swapped without touching the generator or the dials.
 
-- A fourth outer ring — rejected for now, forces the thumb to contort.
-- A plain button/tab bar — functional but reads as bolted-on UI chrome.
-- Long-press or double-tap to enter an "aesthetic mode" where the dials
-  temporarily select aesthetic instead of art — closest to what I want, but
-  possibly a discoverability problem.
-- Freezing the aesthetic mid-intro-animation by tapping — interesting, unproven.
-
-If you have a better idea once the dials are actually working, propose it.
+Considered and set aside: a fourth outer ring (thumb contortion), a tab bar
+(bolted-on chrome), long-press dial-mode (discoverability risk — still the
+strongest v2 candidate if the dots disappoint), tap-to-freeze mid-intro
+(unproven).
 
 ## 5. Intro animation
 
@@ -269,6 +267,10 @@ Instead, derive the interface's look from its own subject — analog synth panel
 oscilloscopes, control surfaces, plotter output. The dial furniture itself
 (rings, glow, detent marks) is the signature element; everything around it should
 be quiet. Spend the boldness there.
+
+The furniture is part of the picture, not chrome above it: the bands are
+translucent so the art reads through them, and the glow, indicator, and detent
+marks take their accent color from the active aesthetic.
 
 ## 9. Open questions for you
 
