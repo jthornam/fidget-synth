@@ -21,17 +21,22 @@ the §4 bar.
 
 ## 1. Organic — flow, growth, soft gradients
 
-1. **Warped bands** — domain-warped fbm (`fbm(p + fbm(p))`) with raking light
-   from a finite-difference gradient. A: frequency. B: warp depth.
-2. **Growth rings** — radial distance field distorted by fbm, banded with an
-   asymmetric profile. A: ring frequency. B: distortion.
-3. **Breathing cells** — voronoi with sinusoidally drifting sites, edge-lit,
-   wet specular highlight at each site. A: cell scale. B: pulse depth.
-4. **Silk flow** — fbm stretched hard along a rotatable axis, with a fine
-   thread overlay. A: scale. B: grain angle *and* fiber tightness. (Replaced
-   the planned stripe interference, which read geometric rather than organic.)
-5. **Spore drift** — three parallax layers of hash-scattered soft particles
-   with per-cell micro-orbits. A: density/size. B: orbit turbulence.
+(A-dials reworked after playtesting: the scale/frequency params read as bare
+zoom in the hand, violating the structure rule. Scales are fixed now.)
+
+1. **Warped bands** — domain-warped fbm with raking light. A: field character
+   (billowy fbm → squared-ridge turbulence, i.e. veins). B: warp depth.
+2. **Growth rings** — banded distance field, asymmetric profile. A: number of
+   ring nuclei (one tree-ring system → four colliding, agate-style).
+   B: distortion.
+3. **Breathing cells** — drifting-site voronoi, edge-lit, wet specular.
+   A: cell shape (euclidean rounded → chebyshev cracked-crystal, a distance-
+   metric morph). B: pulse depth.
+4. **Marbled silk** — banded field pushed through comb-like warping.
+   A: marbling strength (flat weave → heavy swirl). B: band count.
+5. **Spore drift** — three parallax layers of hash-scattered soft particles.
+   A: clustering (uniform scatter → glowing veins along a hidden field).
+   B: orbit turbulence.
 
 All five use a muted natural cosine palette (narrower amplitude than stock).
 
@@ -41,10 +46,11 @@ Render strategy override: dark field, emissive edges, sharp `smoothstep`
 transitions — lines glow, surfaces stay near-black.
 
 1. **Tactical topo** — fbm iso-lines (`fract(fbm*n)` thresholded to glowing
-   contours) over a fine graticule with pulsing waypoint blips. A: contour
-   density. B: graticule density. (The planned domain-quantized "circuitry"
-   variant produced hard tile seams — snapping coordinates before fbm is C0
-   discontinuous at every cell edge — and was dropped.)
+   contours) over a fixed fine graticule with pulsing waypoint blips.
+   A: contour density. B: field turbulence (calm chart → writhing storm;
+   replaced graticule density, which was too tame a dial). (The planned
+   domain-quantized "circuitry" variant produced hard tile seams — snapping
+   coordinates before fbm is C0 discontinuous at every cell edge — dropped.)
 2. **Greebled panels** — recursive grid subdivision by hash (3–4 levels),
    each cell edge-lit, sparse cells glowing. A: subdivision depth bias.
    B: emissive fraction.
@@ -66,23 +72,26 @@ palette quantized from the seed; anti-aliased edges via `fwidth`.
    Bauhaus-poster style. A: disc scale. B: overlap rule (union-ish → XOR-ish).
 3. **Wedge rotation** — screen split into angular wedges from an off-center
    origin, alternating fills, phase drifts the origin slowly. A: wedge count.
-   B: origin eccentricity.
+   B: per-ring twist — concentric rings wind into a spiral staircase
+   (replaced origin eccentricity, which read as a bare pan).
 4. **Kaleidoscopic fold** — six abs-translate-rotate IFS folds, flat bands by
    folded distance with dark grout. A: fold rotation (symmetry family).
    B: fold offset (structure density).
 
-## 4. Glitch — displacement, channel separation, controlled corruption
+## 4. Aurora — luminous sky physics
 
-Render strategy override: a *base image* (cheap fbm field) passed through
-corruption operators; the dials drive the corruption, not the base.
+Replaced the glitch aesthetic wholesale (playtest verdict: never loved it).
+Render strategy: additive light on deep-sky gradients — a luminous flowing
+family that neither organic (matte) nor sci-fi (line-emissive) covers.
 
-1. **Row shear** — horizontal slice displacement by quantized noise, RGB
-   channels displaced unequally. A: shear amplitude. B: slice height.
-2. **Pseudo pixel-sort** — per-column luminance ramp smears where the base
-   exceeds a threshold. A: threshold (rare streaks → total melt). B: streak
-   length. (True pixel-sort is stateful; a ramp-smear reads the same.)
-3. **Block mosh** — the base sampled through a grid of hash-offset UV blocks,
-   some blocks frozen at wrong coordinates. A: block size. B: fraction moshed.
+1. **Curtains** — vertical light ribbons wandering by a per-ribbon sine+fbm
+   path, twinkling star field behind. A: curtain count. B: waviness.
+2. **Nebula** — layered fbm cloud channels mixed into violet/rose/cyan light,
+   stars gated by cloud density. A: cloud character (billow → ridged wisp).
+   B: star density.
+3. **Plasma filaments** — squared-ridge fbm thresholded into a glowing web,
+   brightness pulsing along the field. A: web connectivity (sparse arcs →
+   dense web). B: energy (pulse tempo and color heat).
 
 ## 5. Retro computer — phosphor, scanlines, plotter lines, limited palettes
 
@@ -90,18 +99,20 @@ Render strategy override: 1–2 phosphor tones on near-black, scanline overlay,
 slight barrel hint. Careful: this one is closest to cliché; the modes must be
 structurally interesting, not just a CRT filter.
 
-1. **Plotter contours** — thin single-color iso-lines of an fbm height field
-   with hand-wobble jitter, like pen-plotter output. A: line spacing.
-   B: wobble.
-2. **Scope trace** — phosphor glow around a single-valued waveform
-   (sum of sines), drawn four times at trailing phases for persistence.
-   A: waveform complexity. B: persistence (ghost spread + decay length).
-   (Replaced the planned Lissajous: distance-to-curve needs ~100 samples per
-   pixel to not render as dots, which busts the mobile budget; a y=f(x) trace
-   is exact and cheap.)
-3. **Dither field** — an fbm field quantized through an 8×8 Bayer matrix to
-   two colors, macro-blocks drifting with phase. A: field scale.
-   B: quantization levels (1-bit → 4 grays).
+1. **Plotter contours** — thin iso-lines of an fbm height field with light
+   pen wobble. A: line spacing. B: engraving — up to three cross-hatch
+   shading layers ink in over the darker regions (replaced wobble depth,
+   which was too subtle a dial).
+2. **Scope trace** — phosphor glow around a single-valued waveform.
+   A: waveform chaos — pure tone through harmonics into FM scream.
+   B: persistence — ghost count, decay length, *and* multi-channel vertical
+   spread. (Replaced the planned Lissajous: distance-to-curve needs ~100
+   samples per pixel to not render as dots; a y=f(x) trace is exact and
+   cheap.)
+3. **Vector terrain** — ridge-silhouette layers with glowing crests over a
+   perspective wireframe floor, sliced sun. A: terrain ruggedness. B: scene
+   depth (ridge layer count + grid density). (Replaced the Bayer dither
+   field wholesale per playtest feedback.)
 
 ## Mode-switch behavior
 

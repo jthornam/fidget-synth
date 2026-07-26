@@ -5,11 +5,9 @@
 //
 // Contract (spec §3): pure function of its inputs; 2–3 meaningfully
 // independent params per mode; no dead zones at parameter extremes; time (t)
-// feeds phase only — drift, never accumulated structure. Names are internal —
-// the app shows no words. Algorithm rationale: ALGORITHMS.md.
-//
-// The engine's prelude provides hash/noise/fbm/pal plus the uniforms
-// (uRes etc.); gl_FragCoord is available for pixel-grid effects.
+// feeds phase only — drift, never accumulated structure; and no dial is a
+// bare rotation or zoom. Names are internal — the app shows no words.
+// Algorithm rationale: ALGORITHMS.md.
 
 export const ORGANIC = {
   id: 'organic',
@@ -27,36 +25,48 @@ vec3 opal(float x, float shift) {
 }
 
 vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
-  float sc = mix(1.5, 7.0, A);
   vec3 col;
 
   if (mode < 0.5) {
-    // Warped bands with raking light. A: frequency. B: warp depth.
-    vec2 q = uv * sc;
+    // Warped bands. A: field character — billowy fbm morphs into ridged
+    // turbulence (veins). B: warp depth. Scale is fixed on purpose.
+    vec2 q = uv * 3.4;
     float warp = mix(0.5, 3.0, B);
     vec2 w1 = vec2(fbm(q + t * 0.05), fbm(q + 3.7 - t * 0.04));
-    float w = fbm(q + w1 * warp);
-    float w2 = fbm(q + w1 * warp + vec2(0.06, 0.045));
+    float wf = fbm(q + w1 * warp);
+    float wr = 1.0 - abs(2.0 * wf - 1.0);
+    float w = mix(wf, wr * wr, A);
+    float w2f = fbm(q + w1 * warp + vec2(0.06, 0.045));
+    float w2r = 1.0 - abs(2.0 * w2f - 1.0);
+    float w2 = mix(w2f, w2r * w2r, A);
     float grad = (w - w2) * 8.0;
     col = opal(w * 0.9 + t * 0.006, shift);
     col *= 0.72 + 0.45 * w;
     col += vec3(0.10, 0.09, 0.07) * max(0.0, grad);
     col -= vec3(0.06) * max(0.0, -grad);
-    // A also drives contrast so it's never a bare zoom.
-    col = (col - 0.5) * mix(0.9, 1.25, A) + 0.5;
 
   } else if (mode < 1.5) {
-    // Growth rings with an asymmetric band profile. A: frequency. B: distortion.
-    vec2 q = uv * sc;
-    float rr = length(uv) * sc + fbm(q * 1.5 + t * 0.05) * mix(0.2, 2.5, B);
+    // Growth rings. A: number of ring nuclei — one tree ring system up to
+    // four colliding ones, agate-style. B: distortion.
+    vec2 q = uv * 4.2;
+    float cnt = 1.0 + floor(A * 3.99);
+    float rr = 1e9;
+    for (int i = 0; i < 4; i++) {
+      if (float(i) >= cnt) break;
+      vec2 cc = (vec2(hash(vec2(float(i), 2.2)), hash(vec2(float(i), 6.6))) - 0.5)
+              * vec2(1.4, 2.2);
+      rr = min(rr, length(uv - cc));
+    }
+    rr = rr * 4.2 + fbm(q * 1.5 + t * 0.05) * mix(0.2, 2.5, B);
     float ph = fract(rr);
     float band = smoothstep(0.0, 0.35, ph) * smoothstep(1.0, 0.65, ph);
     col = opal(floor(rr) * 0.13 + shift, shift) * mix(0.30, 1.0, band);
     col += vec3(0.05) * smoothstep(0.0, 0.1, ph) * (1.0 - band);
 
   } else if (mode < 2.5) {
-    // Breathing cells, wet-lit. A: cell scale. B: pulse depth.
-    vec2 q = uv * sc;
+    // Breathing cells. A: cell shape — rounded voronoi morphs to cracked
+    // crystal via the distance metric. B: pulse depth.
+    vec2 q = uv * 4.5;
     vec2 i = floor(q), f = fract(q);
     float d1 = 8.0, d2 = 8.0;
     float id = 0.0;
@@ -64,10 +74,11 @@ vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
     for (int x = -1; x <= 1; x++) {
       vec2 g = vec2(float(x), float(y));
       vec2 o = vec2(hash(i + g), hash(i + g + 7.7));
-      // Jitter capped at 0.35 keeps every nearest site inside the 3x3 search.
       o = 0.5 + 0.35 * sin(t * 0.35 + 6.2831 * o + B * 4.0);
       vec2 rv = g + o - f;
-      float d = dot(rv, rv);
+      vec2 av = abs(rv);
+      float dC = max(av.x, av.y);
+      float d = mix(dot(rv, rv), dC * dC, A);
       if (d < d1) { d2 = d1; d1 = d; id = hash(i + g + 3.3); }
       else if (d < d2) { d2 = d; }
     }
@@ -78,40 +89,44 @@ vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
     col += vec3(0.35, 0.33, 0.28) * spec;
 
   } else if (mode < 3.5) {
-    // Silk flow. A: scale. B: grain angle *and* fiber tightness — never a
-    // bare rotation.
-    float aa = B * 2.4;
-    vec2 dir = vec2(cos(aa), sin(aa));
-    vec2 per = vec2(-dir.y, dir.x);
-    float tight = mix(1.6, 3.6, B);
-    vec2 q = vec2(dot(uv, dir) * sc * 0.5, dot(uv, per) * sc * tight);
-    float v = fbm(q + vec2(0.0, fbm(q * 0.8 + t * 0.05) * 1.2));
-    col = opal(v + t * 0.006, shift) * (0.55 + 0.65 * v);
-    col *= 0.92 + 0.08 * sin(q.y * 12.0);
+    // Marbled silk. A: marbling comb strength — flat weave to heavy swirl.
+    // B: band count.
+    vec2 q = uv * 2.2;
+    float freq = mix(4.0, 18.0, B);
+    float sw = mix(0.15, 2.6, A);
+    float wv = fbm(q * 1.6 + t * 0.04);
+    float y2 = q.y + sw * (0.5 * sin(q.x * 3.0 + wv * 4.0) + wv);
+    float v = sin(y2 * freq) * 0.5 + 0.5;
+    v = smoothstep(0.12, 0.88, v);
+    col = opal(floor(y2 * freq / 6.2831) * 0.11 + shift, shift);
+    col = mix(col * 0.35, col * 1.15, v);
+    col *= 0.94 + 0.06 * sin(q.x * 60.0);
 
   } else {
-    // Spore drift: three parallax layers of soft particles. Positions are
-    // pure functions of t (linear drift + micro-orbits) — a particle field,
-    // not a simulation. A: density/size. B: orbit turbulence.
+    // Spore drift. A: clustering — uniform scatter condenses into glowing
+    // veins along an invisible field. B: orbit turbulence.
     col = opal(shift + 0.1, shift) * 0.10;
     for (int l = 0; l < 3; l++) {
       float fl = float(l);
-      float sl = mix(3.0, 9.0, A) * (1.0 + fl * 0.9);
+      float sl = 6.0 * (1.0 + fl * 0.9);
       vec2 q = uv * sl + vec2(t * 0.05 * (fl + 1.0), t * 0.028 * (fl * 0.7 + 1.0));
       vec2 cb = floor(q);
-      // 3x3 neighborhood so a particle near a cell edge isn't clipped by it.
       for (int gy = -1; gy <= 1; gy++)
       for (int gx = -1; gx <= 1; gx++) {
         vec2 cell = cb + vec2(float(gx), float(gy));
         vec2 o = (vec2(hash(cell), hash(cell + 4.2)) - 0.5) * 0.7;
         float hp = hash(cell + 8.8) * 6.2831;
         o += B * 0.22 * vec2(sin(t * 0.5 + hp), cos(t * 0.43 + hp));
-        float d = length(cell + 0.5 + o - q);
-        float size = mix(0.06, 0.20, hash(cell + 2.6)) * (1.0 + fl * 0.35);
+        vec2 site = cell + 0.5 + o;
+        float fv = fbm(site / sl * 3.2);
+        float wgt = mix(1.0, smoothstep(0.42, 0.62, fv) * 2.2, A);
+        float d = length(site - q);
+        float size = mix(0.06, 0.20, hash(cell + 2.6)) * (1.0 + fl * 0.35)
+                   * mix(1.0, 0.5 + 1.6 * fv, A);
         float spot = smoothstep(size, size * 0.25, d);
         float halo = exp(-d * 9.0) * 0.25;
         vec3 tint = opal(hash(cell + 6.1) * 0.6 + shift, shift);
-        col += (spot * 0.85 + halo) * tint * (1.0 - fl * 0.28);
+        col += (spot * 0.85 + halo) * tint * (1.0 - fl * 0.28) * wgt;
       }
     }
   }
@@ -129,7 +144,6 @@ export const SCIFI = {
   art: `
 vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
   vec3 bg = vec3(0.015, 0.02, 0.035);
-  // Seed-varied emissive tint: cyan / white / violet.
   float hue = fract(shift * 3.0);
   vec3 em = mix(vec3(0.3, 0.9, 1.0),
                 mix(vec3(0.85, 0.9, 1.0), vec3(0.7, 0.5, 1.0), step(0.66, hue)),
@@ -137,10 +151,10 @@ vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
   vec3 col = bg;
 
   if (mode < 0.5) {
-    // Tactical topo: glowing contours + graticule + waypoint blips.
-    // A: contour density. B: graticule density/strength.
+    // Tactical topo. A: contour density. B: field turbulence — calm chart
+    // to writhing storm. Graticule is fixed furniture now.
     vec2 q = uv * 2.4;
-    float f = fbm(q + t * 0.02);
+    float f = fbm(q + mix(0.0, 2.2, B) * fbm(q * 2.3 + t * 0.05) + t * 0.02);
     float n = mix(5.0, 18.0, A);
     float d = abs(fract(f * n) - 0.5);
     float line = smoothstep(0.16, 0.05, d);
@@ -148,13 +162,12 @@ vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
     float idx = floor(f * n + 0.5);
     float bright = 0.5 + 0.7 * step(0.8, hash(vec2(idx, 7.0)));
     col += em * (line * 0.85 * bright + glow * 0.10);
-    float gden = mix(3.0, 14.0, B);
-    vec2 gq = fract(uv * gden) - 0.5;
+    vec2 gq = fract(uv * 7.0) - 0.5;
     float gl = smoothstep(0.02, 0.008, min(abs(gq.x), abs(gq.y)));
-    col += em * gl * (0.10 + 0.15 * B);
-    vec2 gid = floor(uv * gden);
+    col += em * gl * 0.14;
+    vec2 gid = floor(uv * 7.0);
     float wp = step(0.93, hash(gid + 4.4));
-    float wd = length(fract(uv * gden) - 0.5);
+    float wd = length(fract(uv * 7.0) - 0.5);
     col += em * wp * smoothstep(0.12, 0.02, wd)
          * (0.5 + 0.5 * sin(t * 1.5 + hash(gid) * 6.2831));
 
@@ -182,8 +195,6 @@ vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
 
   } else if (mode < 2.5) {
     // Warp field. A: streak density. B: curvature (jump → spiral).
-    // Integer lane count + mod hides the atan wrap seam: the wrap jumps the
-    // raw lane index by exactly N, which mod folds away.
     float r = length(uv) + 0.05;
     float ang = atan(uv.y, uv.x) + mix(0.0, 3.0, B) * r;
     float N = floor(mix(20.0, 90.0, A));
@@ -211,7 +222,7 @@ vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
       if (dot(z, z) > 16.0) { m = float(i); break; }
     }
     if (m < 0.0) {
-      col += em * exp(-trap * 22.0) * 0.5;  // interior orbit-trap filaments
+      col += em * exp(-trap * 22.0) * 0.5;
     } else {
       float sm = m - log2(log(dot(z, z)) * 0.5);
       float v = clamp(sm / 40.0, 0.0, 1.0);
@@ -266,8 +277,7 @@ vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
     col = mix(fill, vec3(0.10, 0.10, 0.11), grout);
 
   } else if (mode < 1.5) {
-    // Circle punch. A: disc scale. B: disc count — structural, not a bare
-    // rotation of the composition.
+    // Circle punch. A: disc scale. B: disc count.
     float cnt2 = mix(3.0, 9.0, B);
     float acc = 0.0;
     float rs = mix(0.22, 0.62, A);
@@ -281,13 +291,14 @@ vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
     col = gcol(acc, shift);
 
   } else if (mode < 2.5) {
-    // Wedge rotation. A: wedge count. B: origin eccentricity.
+    // Wedge rotation. A: wedge count. B: per-ring twist — flat pinwheel
+    // winds into a spiral staircase (replaces the bare origin pan).
     float cnt = floor(mix(3.0, 16.0, A));
-    vec2 o = mix(0.0, 0.55, B)
-           * vec2(cos(shift * 6.2831 + t * 0.03), sin(shift * 6.2831 + t * 0.025));
+    vec2 o = 0.15 * vec2(cos(shift * 6.2831 + t * 0.03), sin(shift * 6.2831 + t * 0.025));
     vec2 p = uv - o;
-    float w = floor((atan(p.y, p.x) / 6.2831 + 0.5) * cnt);
     float ring = floor(length(p) * mix(2.0, 5.0, fract(shift * 7.0)));
+    float twist = mix(0.0, 0.45, B);
+    float w = floor((atan(p.y, p.x) / 6.2831 + 0.5 + ring * twist) * cnt);
     col = gcol(hash(vec2(w, ring)) * 5.0, shift);
 
   } else {
@@ -314,55 +325,74 @@ vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
 `,
 };
 
-export const GLITCH = {
-  id: 'glitch',
-  name: 'Glitch',
+// Replaced the glitch aesthetic wholesale (feedback: never loved it).
+// Aurora: luminous sky physics — a family none of the other four covers.
+export const AURORA = {
+  id: 'aurora',
+  name: 'Aurora',
   modes: 3,
-  accent: [255, 70, 160],
+  accent: [140, 235, 190],
   art: `
-// The base image the corruption operators eat. Vivid on purpose.
-vec3 gbase(vec2 p, float shift) {
-  float f = fbm(p * 3.0 + fbm(p * 3.0) * 1.4);
-  return pal(f * 1.1 + shift, shift) * (0.6 + 0.8 * f);
-}
-
 vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
   vec3 col;
 
   if (mode < 0.5) {
-    // Row shear + channel split. A: shear amplitude. B: slice height.
-    float hs = mix(0.006, 0.09, B);
-    float id = floor(uv.y / hs);
-    float on = step(0.6, hash(vec2(id, floor(t * 0.4) + 2.0)));
-    float amp = mix(0.0, 0.35, A) * (hash(vec2(id, 5.0)) * 2.0 - 1.0) * (0.35 + 0.65 * on);
-    vec2 p = uv + vec2(amp, 0.0);
-    col.r = gbase(p + vec2(amp * 0.6, 0.0), shift).r;
-    col.g = gbase(p, shift).g;
-    col.b = gbase(p - vec2(amp * 0.6, 0.0), shift).b;
+    // Aurora curtains. A: curtain count. B: waviness.
+    col = mix(vec3(0.012, 0.02, 0.055), vec3(0.03, 0.015, 0.07), uv.y + 0.5);
+    vec2 sq = uv * 22.0;
+    vec2 sc = floor(sq);
+    float st = step(0.93, hash(sc)) * smoothstep(0.12, 0.02, length(fract(sq) - 0.5));
+    col += vec3(0.8, 0.85, 1.0) * st * (0.4 + 0.3 * sin(t + hash(sc + 3.3) * 6.2831));
+    float cnt = 2.0 + floor(A * 4.99);
+    for (int i = 0; i < 7; i++) {
+      if (float(i) >= cnt) break;
+      float fi = float(i);
+      float ph = hash(vec2(fi, 9.1)) * 6.2831;
+      float wav = mix(1.2, 4.5, B);
+      float cx = (hash(vec2(fi, 1.7)) - 0.5) * 1.3
+               + 0.45 * sin(uv.y * wav + ph + t * 0.12)
+               + 0.25 * fbm(vec2(uv.y * wav * 0.7 + fi * 7.0, t * 0.05));
+      float d = abs(uv.x - cx);
+      float w = mix(0.025, 0.09, hash(vec2(fi, 5.5)));
+      float g = exp(-(d * d) / (w * w));
+      vec3 ac = mix(vec3(0.15, 1.0, 0.5), vec3(0.5, 0.3, 1.0), hash(vec2(fi, 7.7)));
+      float hgt = smoothstep(-1.1, -0.2, uv.y);
+      col += ac * g * 0.6 * (0.6 + 0.4 * sin(t * 0.35 + ph + uv.y * 2.0)) * hgt;
+    }
 
   } else if (mode < 1.5) {
-    // Melt (pseudo pixel-sort). A: threshold. B: streak length.
-    float th = mix(0.75, 0.35, A);
-    float m = fbm(vec2(uv.x * 6.0, 3.3));
-    float s = smoothstep(th, th + 0.25, m);
-    float anchor = fbm(vec2(uv.x * 6.0, 8.8)) * 1.2 - 0.6;
-    float L = mix(0.15, 0.95, B);
-    float y = mix(uv.y, anchor, s * L);
-    col.r = gbase(vec2(uv.x, y + s * L * 0.012), shift).r;
-    col.g = gbase(vec2(uv.x, y), shift).g;
-    col.b = gbase(vec2(uv.x, y - s * L * 0.012), shift).b;
-    col *= 1.0 - 0.25 * s * L;
+    // Nebula. A: cloud character — billow to wisp (ridged mix).
+    // B: star density.
+    vec2 q = uv * 2.3;
+    float n1 = fbm(q + fbm(q + t * 0.015) * 1.6);
+    float r1 = 1.0 - abs(2.0 * n1 - 1.0);
+    float n = mix(n1, r1 * r1, A);
+    float n2 = fbm(q * 1.7 + 4.7 - t * 0.01);
+    col = vec3(0.015, 0.012, 0.045);
+    col += pow(n, 2.2) * vec3(0.35, 0.15, 0.6) * 1.4;
+    col += pow(n2 * n, 3.0) * vec3(0.9, 0.35, 0.45) * 1.2;
+    col += pow(n * (1.0 - n2), 4.0) * vec3(0.2, 0.7, 0.9);
+    vec2 sq = uv * 30.0;
+    vec2 id2 = floor(sq);
+    float st = step(1.0 - B * 0.12, hash(id2))
+             * smoothstep(0.35, 0.05, length(fract(sq) - 0.5));
+    col += vec3(0.9, 0.9, 1.0) * st * (0.5 + 0.5 * sin(t * 1.3 + hash(id2 + 7.7) * 6.2831))
+         * (0.4 + n * 1.6);
 
   } else {
-    // Block mosh. A: fraction moshed. B: block size.
-    float gs = mix(0.03, 0.16, B);
-    vec2 id = floor(uv / gs);
-    float sel = step(hash(id + floor(t * 0.5) * 0.37), mix(0.05, 0.65, A));
-    vec2 off = (vec2(hash(id + 2.2), hash(id + 8.4)) - 0.5) * 0.5 * sel;
-    col.r = gbase(uv + off * 1.1, shift).r;
-    col.g = gbase(uv + off, shift).g;
-    col.b = gbase(uv + off * 0.9, shift).b;
-    col = mix(col, floor(col * 6.0) / 6.0, sel);
+    // Plasma filaments. A: web connectivity — sparse arcs to dense web.
+    // B: energy — pulse tempo and color heat.
+    vec2 q = uv * 2.6;
+    float r = 1.0 - abs(2.0 * fbm(q + 0.35 * fbm(q * 2.1 + t * 0.04)) - 1.0);
+    float th = mix(0.86, 0.62, A);
+    float fil = pow(smoothstep(th, 0.99, r), 3.0);
+    float pulse = 0.55 + 0.45 * sin(fbm(q * 1.4) * 14.0 - t * mix(0.6, 3.2, B));
+    vec3 cool = vec3(0.25, 0.55, 1.0);
+    vec3 hot = vec3(1.0, 0.5, 0.75);
+    col = vec3(0.012, 0.015, 0.035);
+    col += fbm(q * 0.5) * vec3(0.025, 0.025, 0.06);
+    col += mix(cool, hot, B * pulse) * fil * (0.7 + 1.0 * pulse);
+    col += mix(cool, hot, B) * pow(r, 12.0) * 0.35;
   }
 
   return col;
@@ -385,53 +415,88 @@ vec3 ink(float shift) {
   return vec3(0.55, 1.0, 0.9);
 }
 
-float bayer2(vec2 a) { a = floor(a); return fract(a.x / 2.0 + a.y * a.y * 0.75); }
-float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
-
 vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
   vec3 paper = vec3(0.03, 0.035, 0.04);
   vec3 em = ink(shift);
   vec3 col = paper;
 
   if (mode < 0.5) {
-    // Plotter contours. A: line spacing. B: pen wobble.
+    // Plotter contours. A: line spacing. B: engraving — cross-hatch shading
+    // layers ink in over the darker regions as B rises.
     float n = mix(8.0, 30.0, A);
     vec2 q = uv * 2.6;
-    q += (noise(q * 24.0) - 0.5) * 0.02 * mix(0.2, 3.0, B);
+    q += (noise(q * 24.0) - 0.5) * 0.012;
     float f = fbm(q + t * 0.008);
     float d = abs(fract(f * n) - 0.5) / n;
     float line = smoothstep(0.0030, 0.0010, d);
     float idx = floor(f * n + 0.5);
     float heavy = 1.0 + 0.6 * step(0.75, hash(vec2(idx, 3.0)));
     col += em * line * heavy;
+    for (int i = 0; i < 3; i++) {
+      float fi = float(i);
+      float on = smoothstep(0.10 + fi * 0.28, 0.30 + fi * 0.28, B);
+      float lvl = 0.62 - fi * 0.16;
+      float ang2 = 0.7 + fi * 0.55;
+      vec2 hd = vec2(cos(ang2), sin(ang2));
+      float hl = abs(fract(dot(q, hd) * 14.0) - 0.5);
+      float hline = smoothstep(0.18, 0.05, hl);
+      col += em * hline * 0.28 * on * smoothstep(lvl + 0.06, lvl - 0.06, f);
+    }
 
   } else if (mode < 1.5) {
-    // Oscilloscope trace with phosphor persistence. A: waveform complexity.
-    // B: persistence (ghost spread + glow decay).
-    float fa = mix(2.0, 14.0, A);
-    float decay = mix(70.0, 16.0, B);
-    for (int i = 0; i < 4; i++) {
+    // Scope trace. A: waveform chaos — pure tone to FM scream.
+    // B: persistence — ghost count, decay, and channel spread.
+    float fa = mix(2.0, 9.0, A);
+    float fmA = pow(A, 2.0) * 3.5;
+    float decay = mix(70.0, 18.0, B);
+    float cntT = 3.0 + floor(B * 4.99);
+    for (int i = 0; i < 8; i++) {
+      if (float(i) >= cntT) break;
       float gi = float(i);
-      float phi = t * 0.6 - gi * mix(0.06, 0.5, B);
-      float w = 0.45 * sin(uv.x * fa + phi) * sin(uv.x * 0.7 + phi * 0.31)
-              + 0.12 * sin(uv.x * fa * 2.7 - phi * 1.7);
-      float d = abs(uv.y - w);
-      float fade = pow(0.5, gi);
-      col += em * exp(-d * decay) * 0.9 * fade;
-      col += em * exp(-d * decay * 5.0) * 1.1 * fade;
+      float phi = t * 0.6 - gi * mix(0.06, 0.4, B);
+      float w = 0.42 * sin(uv.x * fa + phi + fmA * sin(uv.x * fa * 2.33 + phi * 1.3));
+      w *= mix(1.0, 0.6 + 0.4 * sin(uv.x * 0.9 + phi * 0.27), 0.6);
+      float d = abs(uv.y - w - (gi - (cntT - 1.0) * 0.5) * mix(0.0, 0.16, B));
+      float fade = pow(0.6, gi);
+      col += em * exp(-d * decay) * 0.85 * fade;
+      col += em * exp(-d * decay * 5.0) * 1.0 * fade;
     }
 
   } else {
-    // Dither field. A: field scale. B: gray levels.
-    float sc2 = mix(1.2, 6.0, A);
-    vec2 cell = floor(gl_FragCoord.xy / 3.0);
-    float v = fbm(uv * sc2 + vec2(t * 0.01, 0.0));
-    // A also mixes in fine grain so it's never a bare zoom.
-    v += A * 0.45 * (fbm(uv * sc2 * 3.7 + 5.0) - 0.5);
-    float L = floor(mix(1.0, 4.99, B));
-    float bay = bayer4(cell) - 0.5;
-    float qv = floor(v * L + 0.5 + bay * 0.9) / L;
-    col += em * qv * 0.85;
+    // Vector terrain: ridge silhouettes over a perspective wireframe floor.
+    // Replaces the dither field wholesale. A: terrain ruggedness.
+    // B: scene depth — ridge layers and grid density.
+    col = mix(vec3(0.008, 0.01, 0.02), vec3(0.03, 0.02, 0.05), uv.y + 0.5);
+    float hor = 0.06;
+    float sd = length(uv - vec2(0.30, 0.34));
+    float sun = smoothstep(0.15, 0.142, sd)
+              * (0.6 + 0.4 * step(0.5, fract(uv.y * 26.0)));
+    col += em * sun * 0.5;
+    float layers = 2.0 + floor(B * 2.99);
+    float rug = mix(0.04, 0.20, A);
+    for (int i = 0; i < 4; i++) {
+      if (float(i) >= layers) break;
+      float fi = float(i);
+      float yBase = hor + 0.16 - fi * 0.055;
+      float amp = (0.35 + fi * 0.3) * rug;
+      float ry = yBase
+               + (fbm(vec2(uv.x * mix(1.5, 4.0, A) * (1.0 + fi * 0.6) + fi * 13.0 + t * 0.008 * (fi + 1.0), fi * 3.3)) - 0.5)
+               * 2.0 * amp;
+      float below = smoothstep(0.004, -0.004, uv.y - ry);
+      col = mix(col, vec3(0.010, 0.016, 0.026) * (1.0 - fi * 0.12), below * 0.88);
+      col += em * exp(-abs(uv.y - ry) * 90.0) * (1.0 - fi * 0.18);
+    }
+    if (uv.y < hor) {
+      float z = 1.0 / (hor - uv.y + 0.02);
+      float gden = mix(2.0, 6.0, B);
+      float lx = abs(fract(uv.x * z * gden * 0.5) - 0.5);
+      float lz = abs(fract(z * gden * 0.6 - t * 0.25) - 0.5);
+      float wpx = 0.12 * (hor - uv.y + 0.05);
+      float gl = smoothstep(wpx, wpx * 0.3, lx) + smoothstep(wpx, wpx * 0.3, lz);
+      float fog = smoothstep(hor, hor - 0.5, uv.y);
+      col = vec3(0.008, 0.01, 0.018);
+      col += em * min(gl, 1.0) * 0.5 * fog;
+    }
   }
 
   // CRT scanlines over everything.
@@ -441,4 +506,4 @@ vec3 art(vec2 uv, float A, float B, float mode, float t, float shift) {
 `,
 };
 
-export const AESTHETICS = [ORGANIC, SCIFI, GEOMETRIC, GLITCH, RETRO];
+export const AESTHETICS = [ORGANIC, SCIFI, GEOMETRIC, AURORA, RETRO];

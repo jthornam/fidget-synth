@@ -92,6 +92,11 @@ Feel-critical enough to pin down here rather than leave to the build:
 
 ### Handedness
 
+**v1 ships right-hand only.** The mirrored left-hand geometry is designed
+below and was built, but the automatic flip felt fiddly in practice, so it's
+disabled: the corner is always bottom-right and the first touch calibrates
+reach only. Revisit with an explicit gesture if left-handed demand shows up.
+
 Handedness is not cosmetic here. A right thumb sweeps an arc whose center sits
 low and to the right; mirrored, the whole geometry fights the hand. This has to
 be settable, and it has to be settable without a settings screen or the word
@@ -192,7 +197,8 @@ aesthetic changes the visual language on top.
 1. **Sci-fi** — hard geometry, precision, luminous edges
 2. **Organic** — flow, growth, soft gradients, natural palettes
 3. **Abstract geometric** — flat, constructivist, hard-edged shape play
-4. **Glitch** — displacement, channel separation, controlled corruption
+4. **Aurora** — luminous sky physics: curtains, nebulae, plasma filaments
+   (replaced Glitch, which never earned its keep)
 5. **Retro computer** — phosphor, scanlines, plotter lines, limited palettes
 
 These should be genuinely distinct — if two of them are the same shapes with a

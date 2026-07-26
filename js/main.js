@@ -134,7 +134,7 @@ if (POSTER != null || BARE) {
   const stored = loadPivot();
   if (stored) {
     placed = true;
-    cluster.handed = stored.handed === 'L' ? 'L' : 'R';
+    // stored.handed deliberately ignored: right-hand only for now.
   }
 }
 resize();
@@ -251,11 +251,12 @@ function shortestDelta(a, b) {
 }
 
 // First touch and long-press reposition share this: the touched point is the
-// thumb tip at rest, so its side picks the corner and its distance from that
-// corner becomes the middle-arc radius.
+// thumb tip at rest, and its distance from the corner becomes the middle-arc
+// radius. Left-hand mode is disabled for now (the automatic flip felt fiddly
+// in practice) — the corner is always bottom-right and pose sets reach only.
 function poseFromPoint(x, y) {
-  const handed = x < W / 2 ? 'L' : 'R';
-  const p = (handed === 'L') ? { x: -12, y: H + 16 } : { x: W + 12, y: H + 16 };
+  const handed = 'R';
+  const p = { x: W + 12, y: H + 16 };
   const rB = clampRB(Math.hypot(x - p.x, y - p.y));
   return { handed, p, rB };
 }
