@@ -2,8 +2,8 @@ import { DialCluster } from './dials.js';
 import { ArtGen } from './gen.js';
 import { AESTHETICS } from './aesthetics.js';
 
-// v3: radius band changed (0.52–0.95); old stored reaches would mask it.
-const STORE_KEY = 'fidget-synth.pivot.v3';
+// v4: radius band changed again (0.65–1.25); old stored reaches would mask it.
+const STORE_KEY = 'fidget-synth.pivot.v4';
 const LONGPRESS_MS = 450;
 const MOVE_CANCEL_PX = 12;
 
@@ -76,7 +76,7 @@ function cornerPivot(handed) {
 // Middle-arc radius limits, as fractions of the short screen dimension.
 function clampRB(r) {
   const m = Math.min(W, H);
-  return Math.min(0.95 * m, Math.max(0.52 * m, r));
+  return Math.min(1.25 * m, Math.max(0.65 * m, r));
 }
 
 function persistPivot(rB = cluster.rB) {
@@ -125,7 +125,7 @@ function resize() {
   cluster.pivot = cornerPivot(cluster.handed);
   cluster.rB = stored
     ? clampRB(stored.rBn * Math.min(W, H))
-    : clampRB(Math.min(W, H) * 0.75);
+    : clampRB(Math.min(W, H) * 0.95);
 }
 
 if (POSTER != null || BARE) {
@@ -154,6 +154,17 @@ function selectorDots() {
   }
   return dots;
 }
+// TEMP: aesthetic.mode label (e.g. "2.3") so per-mode feedback can name what
+// it's about. Remove once the visual set is settled — the app has no words.
+function drawDebugLabel() {
+  const dots = selectorDots();
+  const x0 = Math.min(dots[0].x, dots[dots.length - 1].x);
+  ctx.font = '11px ui-monospace, Menlo, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(170,180,190,0.55)';
+  ctx.fillText((aesIndex + 1) + '.' + (cluster.mode() + 1), x0 - 4, SELECTOR_Y + 26);
+}
+
 function drawSelector() {
   for (const d of selectorDots()) {
     const act = d.i === aesIndex;
@@ -325,6 +336,14 @@ function onUp(e) {
     cluster.liftT = 0;
   } else if (active.type === 'bg') {
     clearTimeout(active.timer);
+    // Horizontal background swipe steps through aesthetics (spec §4):
+    // swipe left = next, right = previous. Dot strip shows where you are.
+    const dx = e.clientX - active.x;
+    const dy = e.clientY - active.y;
+    if (Math.abs(dx) > 55 && Math.abs(dx) > 2 * Math.abs(dy)) {
+      const n = AESTHETICS.length;
+      setAesthetic((aesIndex + (dx < 0 ? 1 : n - 1)) % n, true);
+    }
   }
   active = null;
 }
@@ -356,7 +375,10 @@ function frame(now) {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, W, H);
   cluster.render(ctx);
-  if (selectorVisible()) drawSelector();
+  if (selectorVisible()) {
+    drawSelector();
+    drawDebugLabel();
+  }
 
   requestAnimationFrame(frame);
 }

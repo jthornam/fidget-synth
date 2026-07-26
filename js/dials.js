@@ -69,7 +69,7 @@ export class DialCluster {
 
   radius(i) { return this.rB * this.relRadii[i]; }
   ringWidth() {
-    const w = clamp(this.rB * 0.055, 10, 18);
+    const w = clamp(this.rB * 0.05, 12, 22);
     return this.bare ? w * 1.35 : w;
   }
   // Fixed-pixel details (tick strokes, blur radii) scale with cluster size so
@@ -157,9 +157,46 @@ export class DialCluster {
     ctx.arc(x, y, scrimR, 0, TAU);
     ctx.fill();
 
+    this.drawZone(ctx, 0, this.a.glow);
+    this.drawZone(ctx, 1, this.b.glow);
+    this.drawZone(ctx, 2, this.c.glow);
     this.drawContinuousRing(ctx, 0, this.a);
     this.drawContinuousRing(ctx, 1, this.b);
     this.drawSelectorRing(ctx);
+  }
+
+  // The whole hit band is drawn, not just the arc: a transparent gradient
+  // deepens toward the arc at the band's outer edge and fades to nothing at
+  // the inner boundary, so the touch area visibly belongs to the dial.
+  drawZone(ctx, i, glow) {
+    const { x, y } = this.pivot;
+    const w = this.ringWidth();
+    const rOut = this.radius(i) + w / 2;
+    const rIn = i < 2
+      ? this.radius(i + 1) + w / 2
+      : Math.max(rOut - (this.radius(1) - this.radius(2)), rOut * 0.3);
+
+    const g = ctx.createRadialGradient(x, y, rIn, x, y, rOut);
+    g.addColorStop(0, 'rgba(10,13,16,0)');
+    g.addColorStop(0.7, 'rgba(10,13,16,0.16)');
+    g.addColorStop(1, 'rgba(10,13,16,0.34)');
+    ctx.beginPath();
+    ctx.arc(x, y, rOut, 0, TAU);
+    ctx.arc(x, y, rIn, 0, TAU, true);
+    ctx.fillStyle = g;
+    ctx.fill();
+
+    if (glow > 0.02) {
+      const ga = ctx.createRadialGradient(x, y, rIn, x, y, rOut);
+      ga.addColorStop(0, this.col(0));
+      ga.addColorStop(0.7, this.col(0.10 * glow));
+      ga.addColorStop(1, this.col(0.22 * glow));
+      ctx.beginPath();
+      ctx.arc(x, y, rOut, 0, TAU);
+      ctx.arc(x, y, rIn, 0, TAU, true);
+      ctx.fillStyle = ga;
+      ctx.fill();
+    }
   }
 
   // Translucent glass bands: the art reads through them. Shape is carried by
@@ -179,13 +216,13 @@ export class DialCluster {
     ctx.strokeStyle = glow > 0.02 ? COL.bandLit : COL.band;
     ctx.stroke();
 
+    // Outer edge hairline only — the inner boundary stays open so the band
+    // gradient reads as part of the dial, not a separate stripe.
     ctx.lineWidth = 1;
     ctx.strokeStyle = COL.edge;
-    for (const er of [r - w / 2, r + w / 2]) {
-      ctx.beginPath();
-      ctx.arc(x, y, er, 0, TAU);
-      ctx.stroke();
-    }
+    ctx.beginPath();
+    ctx.arc(x, y, r + w / 2, 0, TAU);
+    ctx.stroke();
 
     if (glow > 0.02) {
       ctx.save();

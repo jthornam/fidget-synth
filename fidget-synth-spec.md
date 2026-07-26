@@ -72,7 +72,9 @@ Feel-critical enough to pin down here rather than leave to the build:
 - **Hit zones are bands, not strokes.** Each dial's touch area runs from its
   own outside edge inward to the next arc's outside edge; the innermost dial
   takes everything inside its edge. Landing a thumb on the drawn arc itself
-  must never be required.
+  must never be required — and the zone is *drawn*: a transparent gradient
+  fills the whole band (deepest at the arc, fading inward, no inner border)
+  so the touch area visibly belongs to the dial.
 - **Delta tracking, not absolute.** Touching a ring never jumps the value to
   the touch angle; the drag applies angular delta from wherever the finger
   landed. Otherwise every touch is a glitch.
@@ -120,7 +122,7 @@ Two details that matter:
 - The settle animation should be quick and confident (~250ms, eased), not a
   drifting float. It should read as the interface *snapping to your hand*, which
   is a nice moment in itself.
-- The arc radius clamps to a sensible band (roughly 0.52–0.95 of the short
+- The arc radius clamps to a sensible band (roughly 0.65–1.25 of the short
   screen dimension) so a touch very near or very far from the corner can't
   produce unusable geometry. The arcs running off-screen is the design, not a
   problem to clamp away.
@@ -202,8 +204,9 @@ rendering strategy, not just color, and each defines its own Dial C mode set
 
 A strip of small dots in the top corner *opposite* the thumb (top-left for a
 right-hander) — one per aesthetic, the active one glowing in that aesthetic's
-accent color. Tap a dot to switch. Wordless, one tap, and far enough from the
-arcs that it can't be hit by accident. The choice persists across launches.
+accent color. Tap a dot to switch, or **swipe horizontally on empty
+background** to step through them (left = next). Wordless either way; the dots
+are the visible state. The choice persists across launches.
 
 Kept architecturally decoupled as originally required: the strip, the ?aes=
 dev override, and persistence all route through one setAesthetic() call, so
